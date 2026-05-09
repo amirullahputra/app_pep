@@ -395,34 +395,65 @@ export function pDecision(){
 export function pVial(){
   const curWeek=S.currentWeek||1;
   const ph=S.ph===0?1:S.ph;
-
-  const totalCompounds=COMPOUNDS.length;
   const today=new Date();
-  const emptyCount=COMPOUNDS.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
-  const orderCount=COMPOUNDS.filter(c=>{
-    const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};
-    return inv.qty>0&&inv.qty<=inv.safetyStock;
-  }).length;
-  const okCount=totalCompounds-emptyCount-orderCount;
-  // Rekon yang mau expired ≤7 hari
-  const expiringSoonCount=COMPOUNDS.filter(c=>{
-    const list=reconCache[c.name]||[];
-    return list.some(r=>{
-      const d=Math.ceil((r.expiredAt-today)/(1000*60*60*24));
-      return d>0&&d<=7;
-    });
-  }).length;
-  const expiredCount=COMPOUNDS.filter(c=>{
-    const list=reconCache[c.name]||[];
-    return list.some(r=>r.expiredAt<=today);
-  }).length;
+  const vt=S.vialTab||'stok';
 
-  const sorted=[...COMPOUNDS].sort((a,b)=>{
+  // ── SUMMARY COUNTS ──
+  const emptyCount=COMPOUNDS.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
+  const orderCount=COMPOUNDS.filter(c=>{const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};return inv.qty>0&&inv.qty<=inv.safetyStock;}).length;
+  const okCount=COMPOUNDS.length-emptyCount-orderCount;
+  const expiringSoonCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>{const d=Math.ceil((r.expiredAt-today)/(1000*60*60*24));return d>0&&d<=7;})).length;
+  const expiredCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt<=today)).length;
+  const hasReconCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt>today)).length;
+
+  // ── SUMMARY BAR ──
+  const summaryBar=`
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--f3)">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f3)">${okCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">AMAN</div>
+    </div>
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--f2)">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${orderCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">ORDER</div>
+    </div>
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--warn)">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${emptyCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">KOSONG</div>
+    </div>
+    <div style="width:1px;background:var(--bdr);flex-shrink:0"></div>
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid #7c3aed">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#7c3aed">${hasReconCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">AKTIF REKON</div>
+    </div>
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--f2)">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${expiringSoonCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">EXP ≤7H</div>
+    </div>
+    <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--warn)">
+      <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${expiredCount}</div>
+      <div style="font-size:10px;color:var(--t2);font-weight:700">EXPIRED</div>
+    </div>
+  </div>`;
+
+  // ── TAB SWITCHER ──
+  const tabBar=`
+  <div style="display:flex;gap:6px;margin-bottom:12px">
+    <button onclick="S.vialTab='stok';renderPanels()" style="padding:8px 20px;border-radius:8px;border:2px solid ${vt==='stok'?'var(--acc)':'var(--bdr)'};background:${vt==='stok'?'var(--acc)':'var(--bg2)'};color:${vt==='stok'?'#fff':'var(--t1)'};font-weight:800;font-size:12px;cursor:pointer">
+      📦 Stok Lyophilized
+    </button>
+    <button onclick="S.vialTab='rekon';renderPanels()" style="padding:8px 20px;border-radius:8px;border:2px solid ${vt==='rekon'?'#7c3aed':'var(--bdr)'};background:${vt==='rekon'?'#7c3aed':'var(--bg2)'};color:${vt==='rekon'?'#fff':'var(--t1)'};font-weight:800;font-size:12px;cursor:pointer">
+      🧪 Reconstituted Vials
+    </button>
+  </div>`;
+
+  // ── TAB 1: STOK LYOPHILIZED ──
+  const sortedStok=[...COMPOUNDS].sort((a,b)=>{
     const rank={ORDER:0,KOSONG:1,AMAN:2};
     return(rank[invStatus(a.name).label]||2)-(rank[invStatus(b.name).label]||2);
   });
 
-  const rows=sorted.map(c=>{
+  const stokRows=sortedStok.map(c=>{
     const vs=VSPECS[c.name]||{vPrice:0,label:'—',vSize:1,unit:'mg'};
     const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};
     const st=invStatus(c.name);
@@ -430,141 +461,159 @@ export function pVial(){
     const consumed=vialsConsumedRange(c,1,curWeek-1);
     const remaining=Math.max(0,tv-consumed);
     const wte=weeksUntilEmpty(c,curWeek);
-    const wteLabel=inv.qty===0?'—':(wte>=56-curWeek+1?'Cukup s/d akhir':`Habis ~W${curWeek+wte}`);
+    const wteLabel=inv.qty===0?'—':(wte>=56-curWeek+1?'Cukup s/d akhir':`~W${curWeek+wte}`);
     const wteCol=inv.qty===0?'var(--t3)':wte<4?'var(--warn)':wte<8?'var(--f2)':'var(--f3)';
     const needTotal=Math.max(remaining,1);
     const haveRatio=Math.min(1,inv.qty/needTotal);
     const ssRatio=Math.min(1,inv.safetyStock/needTotal);
-    const sl=SHELF_LIFE[c.name];
-    const shelfDays=sl?.shelf||null;
-    const shelfLabel=sl?(!sl.shelf?'Oral/Kapsul':`${sl.shelf}h`):' — ';
-    const shelfCol=shelfDays?(shelfDays<=21?'var(--warn)':shelfDays<=30?'var(--f2)':'var(--f3)'):'var(--t3)';
 
-    // reconstituted vials
-    const reconList=reconCache[c.name]||[];
-    const today=new Date();
-    const activeRecon=reconList.filter(r=>r.expiredAt>today);
-    const expiredRecon=reconList.filter(r=>r.expiredAt<=today);
-    const totalReconQty=activeRecon.reduce((a,r)=>a+r.qty,0);
-    const nearestExp=activeRecon.length?activeRecon.reduce((a,r)=>r.expiredAt<a.expiredAt?r:a,activeRecon[0]):null;
-    const nearestDaysLeft=nearestExp?Math.ceil((nearestExp.expiredAt-today)/(1000*60*60*24)):null;
-    const reconExpCol=nearestDaysLeft===null?'var(--t3)':nearestDaysLeft<=3?'var(--warn)':nearestDaysLeft<=7?'var(--f2)':'var(--f3)';
-    const reconBadge=activeRecon.length===0
-      ?`<div style="font-size:10px;color:var(--t3)">—</div>`
-      :`<div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${reconExpCol}">${totalReconQty} vial</div>
-        <div style="font-size:9px;color:${reconExpCol};font-weight:700">exp ${nearestDaysLeft}h lagi</div>`;
-
-    return`<tr>
+    return`<tr onclick="openInvEdit('${c.name}')" style="cursor:pointer">
       <td><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
-      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
+      <td>
         <div style="font-size:13px;font-weight:700;color:var(--t0)">${c.name}</div>
         <div style="font-size:10px;color:var(--t3)">${vs.label}</div>
       </td>
       <td class="c">
         <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;background:${st.col}22;color:${st.col};border:1px solid ${st.col}44">${st.label}</span>
       </td>
-      <td class="c" style="cursor:pointer" onclick="openInvEdit('${c.name}')">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${st.col}">${inv.qty}</div>
-        <div style="font-size:9px;color:var(--t3)">lyoph. stok</div>
+      <td class="c">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:${st.col}">${inv.qty}</div>
+        <div style="font-size:9px;color:var(--t3)">vial on hand</div>
       </td>
       <td class="c">
-        ${reconBadge}
-        <button onclick="openReconModal('${c.name}')" style="margin-top:4px;padding:3px 8px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:9px;font-weight:700;cursor:pointer;color:var(--t1)">+ Rekon</button>
-        ${expiredRecon.length?`<div style="font-size:9px;color:var(--warn);font-weight:700;margin-top:2px">${expiredRecon.length} expired!</div>`:''}
-      </td>
-      <td class="c" style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--t2)">${inv.safetyStock}</div>
         <div style="font-size:9px;color:var(--t3)">min order</div>
       </td>
-      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
-        <div style="width:100%;height:8px;border-radius:4px;background:var(--bg3);position:relative;overflow:hidden">
+      <td>
+        <div style="width:100%;height:8px;border-radius:4px;background:var(--bg3);position:relative;overflow:hidden;margin-bottom:3px">
           <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(haveRatio*100)}%;background:${st.col};border-radius:4px"></div>
           <div style="position:absolute;left:${Math.round(ssRatio*100)}%;top:0;height:100%;width:2px;background:var(--f2);opacity:.9"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px">
-          <span style="font-size:9px;color:var(--t3)">butuh ${remaining}v lagi</span>
-          <span style="font-size:9px;color:var(--t3)">total ${tv}v</span>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:9px;color:var(--t3)">sisa butuh ${remaining}v</span>
+          <span style="font-size:9px;color:var(--t3)">protokol ${tv}v</span>
         </div>
       </td>
-      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
+      <td>
         <div style="font-size:11px;font-weight:700;color:${wteCol}">${wteLabel}</div>
         <div style="font-size:9px;color:var(--t3)">${rp(vs.vPrice)}/vial</div>
-      </td>
-      <td>
-        <div style="font-size:12px;font-weight:700;color:${shelfCol}">${shelfLabel}</div>
-        <div style="font-size:9px;color:var(--t3);max-width:110px;line-height:1.3">${sl?.timing||'—'}</div>
-      </td>
-      <td class="c">
-        <button onclick="openInvEdit('${c.name}')" style="padding:4px 8px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:10px;font-weight:700;cursor:pointer;color:var(--t1)">Edit</button>
       </td>
     </tr>`;
   }).join('');
 
-  return`
-  <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f3)">
-      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f3)">${okCount}</div>
-      <div style="font-size:11px;color:var(--t2);font-weight:700">AMAN</div>
-    </div>
-    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f2)">
-      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${orderCount}</div>
-      <div style="font-size:11px;color:var(--t2);font-weight:700">PERLU ORDER</div>
-    </div>
-    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--warn)">
-      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${emptyCount}</div>
-      <div style="font-size:11px;color:var(--t2);font-weight:700">KOSONG</div>
-    </div>
-    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f2)">
-      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${expiringSoonCount}</div>
-      <div style="font-size:11px;color:var(--t2);font-weight:700">EXP ≤7 HARI</div>
-    </div>
-    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--warn)">
-      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${expiredCount}</div>
-      <div style="font-size:11px;color:var(--t2);font-weight:700">REKON EXPIRED</div>
-    </div>
-    <div class="card" style="flex:2;min-width:200px;display:flex;align-items:center;gap:12px">
-      <div>
-        <div style="font-size:10px;color:var(--t3);font-weight:700;margin-bottom:2px">PROTOKOL BERJALAN</div>
-        <div style="font-size:22px;font-weight:800;color:var(--acc);font-family:'JetBrains Mono',monospace">W${curWeek}</div>
-        <div style="font-size:10px;color:var(--t2)">Fase ${ph} · ${PHASES[ph-1]?.name||''}</div>
-      </div>
-      <div style="width:1px;height:40px;background:var(--bdr)"></div>
-      <div style="font-size:10px;color:var(--t2);line-height:1.7">
-        Bar = stok vs sisa kebutuhan protokol<br>
-        Garis kuning = safety stock threshold<br>
-        Klik baris untuk edit stok &amp; min order
-      </div>
-    </div>
-  </div>
-
+  const stokPanel=`
   <div class="card">
-    <div class="card-title" style="margin-bottom:10px">📦 Inventory Stok &amp; Safety Stock</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-title" style="margin:0">📦 Stok Lyophilized — Vial Mentah On Hand</div>
+      <div style="font-size:10px;color:var(--t3)">Klik baris untuk edit stok</div>
+    </div>
     <div class="tbl-wrap">
       <table>
         <thead><tr style="position:sticky;top:0;background:var(--bg1);z-index:2">
           <th>Layer</th>
           <th>Compound</th>
           <th class="c">Status</th>
-          <th class="c">Lyoph. Stok</th>
-          <th class="c">Rekon. Aktif</th>
+          <th class="c">Stok (vial)</th>
           <th class="c">Min Order</th>
-          <th>Stok vs Kebutuhan</th>
+          <th>Stok vs Kebutuhan Protokol</th>
           <th>Estimasi Habis</th>
-          <th>Shelf / Timing</th>
-          <th class="c"></th>
         </tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${stokRows}</tbody>
       </table>
     </div>
     <div class="note" style="margin-top:8px">
-      <span style="color:var(--f3);font-weight:700">AMAN</span> = stok &gt; min order ·
-      <span style="color:var(--f2);font-weight:700">ORDER</span> = stok ≤ min order ·
-      <span style="color:var(--warn);font-weight:700">KOSONG</span> = 0 vial ·
-      Estimasi habis dihitung dari dose schedule protokol ·
-      Shelf life = ketahanan setelah rekonstituasi ·
-      <span style="color:var(--warn);font-weight:700">≤21 hari</span> = cepat habis, jangan rekonstitusi terlalu banyak sekaligus
+      Bar hijau = stok saat ini · Garis kuning = safety stock · <span style="color:var(--f3);font-weight:700">AMAN</span> stok > min order · <span style="color:var(--f2);font-weight:700">ORDER</span> stok ≤ min order · <span style="color:var(--warn);font-weight:700">KOSONG</span> = 0 vial
     </div>
-  </div>
+  </div>`;
+
+  // ── TAB 2: RECONSTITUTED ──
+  const allReconRows=COMPOUNDS.map(c=>{
+    const sl=SHELF_LIFE[c.name];
+    const shelfDays=sl?.shelf||null;
+    const shelfLabel=shelfDays?`${shelfDays} hari`:(sl?'Oral/Kapsul':'—');
+    const shelfCol=shelfDays?(shelfDays<=21?'var(--warn)':shelfDays<=30?'var(--f2)':'var(--f3)'):'var(--t3)';
+    const reconList=reconCache[c.name]||[];
+    const activeRecon=reconList.filter(r=>r.expiredAt>today);
+    const expiredRecon=reconList.filter(r=>r.expiredAt<=today);
+    const totalQty=activeRecon.reduce((a,r)=>a+r.qty,0);
+    const nearestExp=activeRecon.length?activeRecon.reduce((a,r)=>r.expiredAt<a.expiredAt?r:a,activeRecon[0]):null;
+    const daysLeft=nearestExp?Math.ceil((nearestExp.expiredAt-today)/(1000*60*60*24)):null;
+    const expCol=daysLeft===null?'var(--t3)':daysLeft<=3?'var(--warn)':daysLeft<=7?'var(--f2)':'var(--f3)';
+
+    // detail rows per batch
+    const batchRows=reconList.map(r=>{
+      const dl=Math.ceil((r.expiredAt-today)/(1000*60*60*24));
+      const bc=r.expiredAt<=today?'var(--warn)':dl<=3?'var(--warn)':dl<=7?'var(--f2)':'var(--f3)';
+      const expFmt=r.expiredAt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+      const reconFmt=r.reconDate.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
+      const statusTxt=r.expiredAt<=today?'EXPIRED':dl<=3?`${dl}h lagi!`:dl<=7?`${dl}h lagi`:`${dl}h lagi`;
+      return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+        <div style="font-size:9px;color:var(--t3);flex-shrink:0;width:70px">${reconFmt}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--t0);flex-shrink:0;width:40px">${r.qty}v</div>
+        <div style="flex:1;font-size:9px;color:var(--t3)">${r.notes||'—'}</div>
+        <div style="font-size:9px;font-weight:700;color:${bc};flex-shrink:0">Exp: ${expFmt} · <span style="font-weight:800">${statusTxt}</span></div>
+        <button onclick="event.stopPropagation();deleteReconVial('${r.id}','${c.name}')" style="padding:2px 7px;border-radius:4px;border:1px solid var(--warn-bdr);background:var(--warn-bg);color:var(--warn);font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">Hapus</button>
+      </div>`;
+    }).join('');
+
+    return`<tr>
+      <td style="vertical-align:top;padding-top:10px"><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
+      <td style="vertical-align:top;padding-top:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--t0)">${c.name}</div>
+        <div style="font-size:10px;color:${shelfCol};font-weight:700">${shelfLabel}</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:1px">${sl?.timing||'—'}</div>
+      </td>
+      <td class="c" style="vertical-align:top;padding-top:10px">
+        ${activeRecon.length===0
+          ?`<div style="font-size:10px;color:var(--t3)">—</div>`
+          :`<div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:${expCol}">${totalQty}</div>
+            <div style="font-size:9px;color:${expCol};font-weight:700">vial aktif</div>`}
+        ${expiredRecon.length?`<div style="font-size:9px;color:var(--warn);font-weight:800;margin-top:2px">${expiredRecon.length} EXPIRED</div>`:''}
+      </td>
+      <td class="c" style="vertical-align:top;padding-top:10px">
+        ${daysLeft===null
+          ?`<div style="font-size:10px;color:var(--t3)">—</div>`
+          :`<div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${expCol}">${daysLeft}h</div>
+            <div style="font-size:9px;color:${expCol};font-weight:700">terdekat</div>`}
+      </td>
+      <td style="vertical-align:top">
+        <div style="max-width:340px">
+          ${reconList.length===0
+            ?`<div style="font-size:10px;color:var(--t3);padding:6px 0">Belum ada rekonstituasi</div>`
+            :batchRows}
+        </div>
+        <button onclick="openReconModal('${c.name}')" style="margin-top:6px;padding:4px 12px;border-radius:var(--r);border:1.5px solid #7c3aed44;background:#7c3aed11;font-size:10px;font-weight:700;cursor:pointer;color:#7c3aed">+ Tambah Rekonstituasi</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const reconPanel=`
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-title" style="margin:0">🧪 Reconstituted Vials — Vial Sudah Dilarutkan</div>
+      <div style="font-size:10px;color:var(--t3)">Shelf life dihitung otomatis dari tanggal rekonstituasi</div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr style="position:sticky;top:0;background:var(--bg1);z-index:2">
+          <th>Layer</th>
+          <th>Compound &amp; Timing</th>
+          <th class="c">Vial Aktif</th>
+          <th class="c">Exp Terdekat</th>
+          <th>Riwayat Batch</th>
+        </tr></thead>
+        <tbody>${allReconRows}</tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:8px">
+      Shelf life = ketahanan setelah rekonstituasi · <span style="color:var(--warn);font-weight:700">≤21 hari</span> = cepat rusak, jangan rekonstitusi terlalu banyak sekaligus · Expired otomatis berdasarkan tanggal rekon + shelf life
+    </div>
+  </div>`;
+
+  return`
+  ${summaryBar}
+  ${tabBar}
+  ${vt==='stok'?stokPanel:reconPanel}
 
   <div id="inv-modal" class="modal-overlay" onclick="if(event.target===this)closeInvModal()">
     <div class="modal-box" style="max-width:360px">
@@ -596,9 +645,7 @@ export function pVial(){
       <div class="modal-title" id="recon-modal-title">Rekonstituasi Vial</div>
       <div class="modal-sub">Catat vial yang sudah direkonstituasi. Expired otomatis dihitung dari shelf life.</div>
       <input type="hidden" id="recon-modal-name">
-
       <div id="recon-existing" style="margin-bottom:14px;max-height:180px;overflow-y:auto"></div>
-
       <div style="border-top:1px solid var(--bdr);padding-top:12px;margin-bottom:4px">
         <div style="font-size:10px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">+ Tambah Entri Rekonstituasi</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">

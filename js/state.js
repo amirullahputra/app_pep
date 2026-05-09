@@ -10,6 +10,7 @@ export let S={
   budSel:new Set(),
   vialPOV:'all',
   vialSort:'cost',
+  vialTab:'stok',
   filterCats:new Set(Object.keys(CAT)),
   search:'',
 };
