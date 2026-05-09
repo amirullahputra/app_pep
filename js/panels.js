@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY } from './data.js';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js';
 import {
   S, DM, _dmAllNames,
   rp, rpM, pCost, totCost, totVials,
@@ -396,6 +396,9 @@ export function pVial(){
     const needTotal=Math.max(remaining,1);
     const haveRatio=Math.min(1,inv.qty/needTotal);
     const ssRatio=Math.min(1,inv.safetyStock/needTotal);
+    const sl=SHELF_LIFE[c.name];
+    const shelfLabel=sl?(!sl.shelf?'Oral/Kapsul':`${sl.shelf}h reconst.`):'—';
+    const shelfCol=sl?.shelf?( sl.shelf<=21?'var(--warn)':sl.shelf<=30?'var(--f2)':'var(--f3)'):'var(--t3)';
 
     return`<tr style="cursor:pointer" onclick="openInvEdit('${c.name}')">
       <td><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
@@ -427,6 +430,10 @@ export function pVial(){
       <td>
         <div style="font-size:11px;font-weight:700;color:${wteCol}">${wteLabel}</div>
         <div style="font-size:9px;color:var(--t3)">${rp(vs.vPrice)}/vial</div>
+      </td>
+      <td>
+        <div style="font-size:11px;font-weight:700;color:${shelfCol}">${shelfLabel}</div>
+        <div style="font-size:9px;color:var(--t3);max-width:120px;line-height:1.3">${sl?.timing||'—'}</div>
       </td>
       <td class="c" onclick="event.stopPropagation();openInvEdit('${c.name}')">
         <button style="padding:5px 10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:11px;font-weight:700;cursor:pointer;color:var(--t1)">Edit</button>
@@ -475,6 +482,7 @@ export function pVial(){
           <th class="c">Min Order</th>
           <th>Stok vs Kebutuhan</th>
           <th>Estimasi Habis</th>
+          <th>Shelf Life &amp; Timing</th>
           <th class="c"></th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -484,7 +492,9 @@ export function pVial(){
       <span style="color:var(--f3);font-weight:700">AMAN</span> = stok &gt; min order ·
       <span style="color:var(--f2);font-weight:700">ORDER</span> = stok ≤ min order ·
       <span style="color:var(--warn);font-weight:700">KOSONG</span> = 0 vial ·
-      Estimasi habis dihitung dari dose schedule protokol
+      Estimasi habis dihitung dari dose schedule protokol ·
+      Shelf life = ketahanan setelah rekonstituasi ·
+      <span style="color:var(--warn);font-weight:700">≤21 hari</span> = cepat habis, jangan rekonstitusi terlalu banyak sekaligus
     </div>
   </div>
 

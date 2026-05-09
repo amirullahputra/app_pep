@@ -183,3 +183,33 @@ export const REDUNDANCY=[
   {id:'hpg',lvl:'MED',title:'HCG + Kisspeptin + HMG — HPG Triple',body:'HPG axis over-stimulation. HMG hanya jika FSH drop confirmed via bloodwork.',rec:'Mulai HCG + Kisspeptin dulu. Tambah HMG hanya setelah bloodwork konfirmasi.',cmps:['HCG','Kisspeptin-10','HMG'],thresh:3},
   {id:'ss',lvl:'LOW',title:'Selank + Semax — Jadwal Ketat',body:'Semax stimulant-adjacent vs Selank anxiolytic. Tidak kontraindikasi tapi jadwal salah → insomnia.',rec:'Semax pagi. Selank sore/malam (1–2h sebelum tidur).',cmps:['Selank','Semax'],thresh:2},
 ];
+
+// shelf: hari ketahanan setelah rekonstituasi (null = oral/kapsul, tidak perlu rekonstituasi)
+export const SHELF_LIFE={
+  'SS-31':          {shelf:21,  timing:'Bebas (Pagi lebih disarankan)'},
+  'MOTS-c':         {shelf:30,  timing:'Pagi atau Sebelum Kardio'},
+  'NAD+':           {shelf:30,  timing:'Pagi hari'},
+  'Retatrutide':    {shelf:30,  timing:'Bebas (Umumnya Pagi)'},
+  'AOD-9604':       {shelf:30,  timing:'Pagi (Perut Kosong) / Fasted Cardio'},
+  '5-Amino-1MQ':    {shelf:null,timing:'Pagi atau Siang hari'},
+  'SLU-PP-332':     {shelf:null,timing:'Pagi / Sebelum latihan'},
+  'HGH':            {shelf:30,  timing:'Pagi (Fasted) atau Malam'},
+  'CJC-1295+IPA':   {shelf:45,  timing:'Malam (Perut kosong sebelum tidur)'},
+  'IGF-1 LR3':      {shelf:30,  timing:'Segera setelah latihan (Post-Workout)'},
+  'HCG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
+  'HMG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
+  'Kisspeptin-10':  {shelf:45,  timing:'Pagi hari'},
+  'PT-141':         {shelf:45,  timing:'Sore / Malam (Saat lapar parah)'},
+  'BPC-157':        {shelf:45,  timing:'Pagi atau setelah latihan beban'},
+  'TB-500':         {shelf:45,  timing:'Bebas (Suntik 2x seminggu)'},
+  'ARA-290':        {shelf:21,  timing:'Pagi atau sebelum latihan'},
+  'Epitalon':       {shelf:45,  timing:'Pagi hari'},
+  'DSIP':           {shelf:21,  timing:'Malam (30-60 menit sebelum tidur)'},
+  'Semax':          {shelf:30,  timing:'Pagi / Sebelum mulai kerja keras'},
+  'Selank':         {shelf:30,  timing:'Sore / Malam (Saat stres & mau santai)'},
+  'KPV':            {shelf:45,  timing:'Pagi (Perut kosong)'},
+  'Thymosan a-1':   {shelf:30,  timing:'Pagi hari'},
+  'Cagrilintide':   {shelf:30,  timing:'Bebas (Umumnya Pagi)'},
+  'Tesamorelin':    {shelf:30,  timing:'Pagi (Fasted)'},
+  'GHK-Cu':         {shelf:30,  timing:'Pagi / Setelah latihan'},
+};
