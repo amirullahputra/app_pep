@@ -15,7 +15,8 @@ import {
 } from './supabase.js';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
-  dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary
+  dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
+  dmPush, dmSetStage
 } from './panels.js';
 import * as panelFns from './panels.js';
 import * as supaFns from './supabase.js';

@@ -107,8 +107,11 @@ export function autoPickBudget(){
 }
 
 // ── DM STATE ──
+// stages: Map<name, 'watchlist'|'tentatif'|'deal'>
+// watchlist = masuk pertimbangan, tentatif = sudah hampir fix, deal = confirmed
 export const DM={
-  checked:new Set(),
+  stages:new Map(),
+  dmTab:'pipeline',   // 'pipeline' | 'pertimbangan'
   filterLayer:'all',
   filterStatus:'all',
   filterSport:'all',
@@ -116,5 +119,10 @@ export const DM={
   sortCol:'prio',
   sortDir:-1
 };
+
+// helper: compound yang masuk Vial Planner = tentatif + deal
+export function dmDealt(){return new Set([...DM.stages.entries()].filter(([,v])=>v==='tentatif'||v==='deal').map(([k])=>k));}
+// backward compat shim agar pVial() tidak crash sebelum di-update
+export const _dmCheckedShim=()=>dmDealt();
 
 export let _dmAllNames=[];
