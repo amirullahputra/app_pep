@@ -6,9 +6,10 @@ import { S, pCost, rpM, initBudSel } from './state.js';
 import * as stateModule from './state.js';
 import {
   saveBudgetToDB, loadBudgetFromDB,
-  loadCustomDoses, loadInventory,
+  loadCustomDoses, loadInventory, loadReconVials,
   openDoseEdit, closeDoseModal, confirmDoseEdit, resetDoseEdit,
   openInvEdit, closeInvModal, confirmInvEdit,
+  openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
   openAuthModal, closeAuthModal, doLogin, updateAuthUI, onAuthBtnClick,
   setupAuthListener
 } from './supabase.js';

@@ -63,6 +63,9 @@ export function isCustomDose(compoundName,week){
 // ── INVENTORY ──
 export let inventoryCache={};
 
+// reconCache[compoundName] = [{id, qty_vials, reconstituted_at (Date), expired_at (Date)}]
+export let reconCache={};
+
 export function vialsConsumedRange(c,fromWeek,toWeek){
   let totalMg=0;
   for(let w=fromWeek;w<=toWeek;w++){const d=getDose(c.name,w);if(d)totalMg+=d;}

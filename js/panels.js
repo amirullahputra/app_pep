@@ -6,7 +6,7 @@ import {
   S, DM, _dmAllNames,
   rp, rpM, pCost, totCost, totVials,
   scCol, scSpill, stLabel, phOfW, getPrio, budEff, sportScore, getConflicts,
-  customDoses, inventoryCache, getDose, isCustomDose,
+  customDoses, inventoryCache, reconCache, getDose, isCustomDose,
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested
 } from './state.js';
@@ -371,12 +371,25 @@ export function pVial(){
   const ph=S.ph===0?1:S.ph;
 
   const totalCompounds=COMPOUNDS.length;
+  const today=new Date();
   const emptyCount=COMPOUNDS.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
   const orderCount=COMPOUNDS.filter(c=>{
     const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};
     return inv.qty>0&&inv.qty<=inv.safetyStock;
   }).length;
   const okCount=totalCompounds-emptyCount-orderCount;
+  // Rekon yang mau expired ≤7 hari
+  const expiringSoonCount=COMPOUNDS.filter(c=>{
+    const list=reconCache[c.name]||[];
+    return list.some(r=>{
+      const d=Math.ceil((r.expiredAt-today)/(1000*60*60*24));
+      return d>0&&d<=7;
+    });
+  }).length;
+  const expiredCount=COMPOUNDS.filter(c=>{
+    const list=reconCache[c.name]||[];
+    return list.some(r=>r.expiredAt<=today);
+  }).length;
 
   const sorted=[...COMPOUNDS].sort((a,b)=>{
     const rank={ORDER:0,KOSONG:1,AMAN:2};
@@ -397,63 +410,91 @@ export function pVial(){
     const haveRatio=Math.min(1,inv.qty/needTotal);
     const ssRatio=Math.min(1,inv.safetyStock/needTotal);
     const sl=SHELF_LIFE[c.name];
-    const shelfLabel=sl?(!sl.shelf?'Oral/Kapsul':`${sl.shelf}h reconst.`):'—';
-    const shelfCol=sl?.shelf?( sl.shelf<=21?'var(--warn)':sl.shelf<=30?'var(--f2)':'var(--f3)'):'var(--t3)';
+    const shelfDays=sl?.shelf||null;
+    const shelfLabel=sl?(!sl.shelf?'Oral/Kapsul':`${sl.shelf}h`):' — ';
+    const shelfCol=shelfDays?(shelfDays<=21?'var(--warn)':shelfDays<=30?'var(--f2)':'var(--f3)'):'var(--t3)';
 
-    return`<tr style="cursor:pointer" onclick="openInvEdit('${c.name}')">
+    // reconstituted vials
+    const reconList=reconCache[c.name]||[];
+    const today=new Date();
+    const activeRecon=reconList.filter(r=>r.expiredAt>today);
+    const expiredRecon=reconList.filter(r=>r.expiredAt<=today);
+    const totalReconQty=activeRecon.reduce((a,r)=>a+r.qty,0);
+    const nearestExp=activeRecon.length?activeRecon.reduce((a,r)=>r.expiredAt<a.expiredAt?r:a,activeRecon[0]):null;
+    const nearestDaysLeft=nearestExp?Math.ceil((nearestExp.expiredAt-today)/(1000*60*60*24)):null;
+    const reconExpCol=nearestDaysLeft===null?'var(--t3)':nearestDaysLeft<=3?'var(--warn)':nearestDaysLeft<=7?'var(--f2)':'var(--f3)';
+    const reconBadge=activeRecon.length===0
+      ?`<div style="font-size:10px;color:var(--t3)">—</div>`
+      :`<div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${reconExpCol}">${totalReconQty} vial</div>
+        <div style="font-size:9px;color:${reconExpCol};font-weight:700">exp ${nearestDaysLeft}h lagi</div>`;
+
+    return`<tr>
       <td><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
-      <td>
+      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="font-size:13px;font-weight:700;color:var(--t0)">${c.name}</div>
         <div style="font-size:10px;color:var(--t3)">${vs.label}</div>
       </td>
       <td class="c">
         <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;background:${st.col}22;color:${st.col};border:1px solid ${st.col}44">${st.label}</span>
       </td>
-      <td class="c">
+      <td class="c" style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${st.col}">${inv.qty}</div>
-        <div style="font-size:9px;color:var(--t3)">vial ada</div>
+        <div style="font-size:9px;color:var(--t3)">lyoph. stok</div>
       </td>
       <td class="c">
+        ${reconBadge}
+        <button onclick="openReconModal('${c.name}')" style="margin-top:4px;padding:3px 8px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:9px;font-weight:700;cursor:pointer;color:var(--t1)">+ Rekon</button>
+        ${expiredRecon.length?`<div style="font-size:9px;color:var(--warn);font-weight:700;margin-top:2px">${expiredRecon.length} expired!</div>`:''}
+      </td>
+      <td class="c" style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--t2)">${inv.safetyStock}</div>
         <div style="font-size:9px;color:var(--t3)">min order</div>
       </td>
-      <td>
+      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="width:100%;height:8px;border-radius:4px;background:var(--bg3);position:relative;overflow:hidden">
           <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(haveRatio*100)}%;background:${st.col};border-radius:4px"></div>
           <div style="position:absolute;left:${Math.round(ssRatio*100)}%;top:0;height:100%;width:2px;background:var(--f2);opacity:.9"></div>
         </div>
         <div style="display:flex;justify-content:space-between;margin-top:3px">
           <span style="font-size:9px;color:var(--t3)">butuh ${remaining}v lagi</span>
-          <span style="font-size:9px;color:var(--t3)">total ${tv}v protokol</span>
+          <span style="font-size:9px;color:var(--t3)">total ${tv}v</span>
         </div>
       </td>
-      <td>
+      <td style="cursor:pointer" onclick="openInvEdit('${c.name}')">
         <div style="font-size:11px;font-weight:700;color:${wteCol}">${wteLabel}</div>
         <div style="font-size:9px;color:var(--t3)">${rp(vs.vPrice)}/vial</div>
       </td>
       <td>
-        <div style="font-size:11px;font-weight:700;color:${shelfCol}">${shelfLabel}</div>
-        <div style="font-size:9px;color:var(--t3);max-width:120px;line-height:1.3">${sl?.timing||'—'}</div>
+        <div style="font-size:12px;font-weight:700;color:${shelfCol}">${shelfLabel}</div>
+        <div style="font-size:9px;color:var(--t3);max-width:110px;line-height:1.3">${sl?.timing||'—'}</div>
       </td>
-      <td class="c" onclick="event.stopPropagation();openInvEdit('${c.name}')">
-        <button style="padding:5px 10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:11px;font-weight:700;cursor:pointer;color:var(--t1)">Edit</button>
+      <td class="c">
+        <button onclick="openInvEdit('${c.name}')" style="padding:4px 8px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-size:10px;font-weight:700;cursor:pointer;color:var(--t1)">Edit</button>
       </td>
     </tr>`;
   }).join('');
 
   return`
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-    <div class="card" style="flex:1;min-width:110px;text-align:center;border-top:3px solid var(--f3)">
+    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f3)">
       <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f3)">${okCount}</div>
       <div style="font-size:11px;color:var(--t2);font-weight:700">AMAN</div>
     </div>
-    <div class="card" style="flex:1;min-width:110px;text-align:center;border-top:3px solid var(--f2)">
+    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f2)">
       <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${orderCount}</div>
       <div style="font-size:11px;color:var(--t2);font-weight:700">PERLU ORDER</div>
     </div>
-    <div class="card" style="flex:1;min-width:110px;text-align:center;border-top:3px solid var(--warn)">
+    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--warn)">
       <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${emptyCount}</div>
       <div style="font-size:11px;color:var(--t2);font-weight:700">KOSONG</div>
+    </div>
+    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--f2)">
+      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f2)">${expiringSoonCount}</div>
+      <div style="font-size:11px;color:var(--t2);font-weight:700">EXP ≤7 HARI</div>
+    </div>
+    <div class="card" style="flex:1;min-width:100px;text-align:center;border-top:3px solid var(--warn)">
+      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${expiredCount}</div>
+      <div style="font-size:11px;color:var(--t2);font-weight:700">REKON EXPIRED</div>
     </div>
     <div class="card" style="flex:2;min-width:200px;display:flex;align-items:center;gap:12px">
       <div>
@@ -478,11 +519,12 @@ export function pVial(){
           <th>Layer</th>
           <th>Compound</th>
           <th class="c">Status</th>
-          <th class="c">Stok Ada</th>
+          <th class="c">Lyoph. Stok</th>
+          <th class="c">Rekon. Aktif</th>
           <th class="c">Min Order</th>
           <th>Stok vs Kebutuhan</th>
           <th>Estimasi Habis</th>
-          <th>Shelf Life &amp; Timing</th>
+          <th>Shelf / Timing</th>
           <th class="c"></th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -518,6 +560,42 @@ export function pVial(){
       <div style="display:flex;gap:8px">
         <button onclick="closeInvModal()" style="flex:1;padding:10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-weight:700;cursor:pointer;color:var(--t1)">Batal</button>
         <button onclick="confirmInvEdit()" style="flex:2;padding:10px;border-radius:var(--r);border:none;background:var(--acc);color:#fff;font-weight:800;cursor:pointer">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="recon-modal" class="modal-overlay" onclick="if(event.target===this)closeReconModal()">
+    <div class="modal-box" style="max-width:420px">
+      <button class="modal-close" onclick="closeReconModal()">✕</button>
+      <div class="modal-title" id="recon-modal-title">Rekonstituasi Vial</div>
+      <div class="modal-sub">Catat vial yang sudah direkonstituasi. Expired otomatis dihitung dari shelf life.</div>
+      <input type="hidden" id="recon-modal-name">
+
+      <div id="recon-existing" style="margin-bottom:14px;max-height:180px;overflow-y:auto"></div>
+
+      <div style="border-top:1px solid var(--bdr);padding-top:12px;margin-bottom:4px">
+        <div style="font-size:10px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">+ Tambah Entri Rekonstituasi</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">JUMLAH VIAL</label>
+            <input id="recon-qty-input" type="number" min="1" value="1"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--bg2);color:var(--t0)">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">TGL REKONSTITUASI</label>
+            <input id="recon-date-input" type="date"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:13px;font-weight:600;background:var(--bg2);color:var(--t0)">
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">CATATAN (opsional)</label>
+          <input id="recon-notes-input" type="text" placeholder="misal: batch A, sudah dibuka..."
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:12px;background:var(--bg2);color:var(--t0)">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeReconModal()" style="flex:1;padding:10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--bg2);font-weight:700;cursor:pointer;color:var(--t1)">Tutup</button>
+        <button onclick="confirmReconAdd()" style="flex:2;padding:10px;border-radius:var(--r);border:none;background:var(--acc);color:#fff;font-weight:800;cursor:pointer">+ Catat Rekonstituasi</button>
       </div>
     </div>
   </div>`;

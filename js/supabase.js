@@ -2,7 +2,8 @@
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
 import { COMPOUNDS, VSPECS } from './data.js';
-import { S, initBudSel, customDoses, inventoryCache, getDose } from './state.js';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js';
+import { SHELF_LIFE } from './data.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -172,6 +173,108 @@ export async function confirmInvEdit(){
   window.renderPanels();
 }
 
+// ── RECONSTITUTED VIALS ──
+export async function loadReconVials(){
+  const{data:{user}}=await supa.auth.getUser();
+  Object.keys(reconCache).forEach(k=>delete reconCache[k]);
+  if(!user)return;
+  const{data}=await supa.from('reconstituted_vials')
+    .select('id,compound_name,qty_vials,reconstituted_at,notes')
+    .eq('user_id',user.id)
+    .order('reconstituted_at',{ascending:false});
+  if(!data)return;
+  data.forEach(r=>{
+    const sl=SHELF_LIFE[r.compound_name];
+    const reconDate=new Date(r.reconstituted_at);
+    const shelfDays=sl?.shelf||30;
+    const expiredAt=new Date(reconDate);
+    expiredAt.setDate(expiredAt.getDate()+shelfDays);
+    if(!reconCache[r.compound_name])reconCache[r.compound_name]=[];
+    reconCache[r.compound_name].push({
+      id:r.id,
+      qty:r.qty_vials,
+      reconDate,
+      expiredAt,
+      notes:r.notes||''
+    });
+  });
+}
+
+export async function addReconVial(compoundName, qty, reconDateStr, notes){
+  const{data:{user}}=await supa.auth.getUser();
+  if(!user){alert('Login dulu!');return;}
+  const{data,error}=await supa.from('reconstituted_vials').insert({
+    user_id:user.id,
+    compound_name:compoundName,
+    qty_vials:qty,
+    reconstituted_at:reconDateStr,
+    notes:notes||null
+  }).select().single();
+  if(error){alert('Gagal simpan: '+error.message);return;}
+  const sl=SHELF_LIFE[compoundName];
+  const reconDate=new Date(reconDateStr);
+  const shelfDays=sl?.shelf||30;
+  const expiredAt=new Date(reconDate);
+  expiredAt.setDate(expiredAt.getDate()+shelfDays);
+  if(!reconCache[compoundName])reconCache[compoundName]=[];
+  reconCache[compoundName].unshift({id:data.id,qty,reconDate,expiredAt,notes:notes||''});
+  showSaveInd();
+  window.renderPanels();
+}
+
+export async function deleteReconVial(id, compoundName){
+  const{data:{user}}=await supa.auth.getUser();
+  if(!user)return;
+  await supa.from('reconstituted_vials').delete().eq('id',id).eq('user_id',user.id);
+  if(reconCache[compoundName]){
+    reconCache[compoundName]=reconCache[compoundName].filter(r=>r.id!==id);
+  }
+  showSaveInd();
+  window.renderPanels();
+}
+
+export function openReconModal(name){
+  document.getElementById('recon-modal-name').value=name;
+  document.getElementById('recon-modal-title').textContent=name;
+  document.getElementById('recon-qty-input').value=1;
+  document.getElementById('recon-date-input').value=new Date().toISOString().split('T')[0];
+  document.getElementById('recon-notes-input').value='';
+  // render existing recon entries
+  const entries=reconCache[name]||[];
+  const sl=SHELF_LIFE[name];
+  const today=new Date();
+  document.getElementById('recon-existing').innerHTML=entries.length===0
+    ?'<div style="color:var(--t3);font-size:11px;padding:8px 0">Belum ada vial yang direkonstitusi</div>'
+    :entries.map(e=>{
+      const daysLeft=Math.ceil((e.expiredAt-today)/(1000*60*60*24));
+      const expCol=daysLeft<=3?'var(--warn)':daysLeft<=7?'var(--f2)':'var(--f3)';
+      const expFmt=e.expiredAt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+      const reconFmt=e.reconDate.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
+      return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr)">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;color:var(--t0)">${e.qty} vial — Rekon: ${reconFmt}</div>
+          <div style="font-size:10px;color:${expCol};font-weight:700">Exp: ${expFmt} (${daysLeft>0?daysLeft+'h lagi':'EXPIRED'})</div>
+          ${e.notes?`<div style="font-size:10px;color:var(--t2)">${e.notes}</div>`:''}
+        </div>
+        <button onclick="deleteReconVial('${e.id}','${name}')" style="padding:4px 10px;border-radius:var(--r);border:1px solid var(--warn-bdr);background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;cursor:pointer">Hapus</button>
+      </div>`;
+    }).join('');
+  document.getElementById('recon-modal').classList.add('open');
+}
+
+export function closeReconModal(){document.getElementById('recon-modal').classList.remove('open');}
+
+export async function confirmReconAdd(){
+  const name=document.getElementById('recon-modal-name').value;
+  const qty=parseInt(document.getElementById('recon-qty-input').value)||0;
+  const dateStr=document.getElementById('recon-date-input').value;
+  const notes=document.getElementById('recon-notes-input').value.trim();
+  if(!qty||qty<1){alert('Jumlah vial harus ≥1');return;}
+  if(!dateStr){alert('Tanggal rekonstituasi wajib diisi');return;}
+  closeReconModal();
+  await addReconVial(name,qty,dateStr,notes);
+}
+
 // ── AUTH ──
 export function openAuthModal(){document.getElementById('auth-modal').classList.add('open');}
 export function closeAuthModal(){document.getElementById('auth-modal').classList.remove('open');document.getElementById('auth-err').textContent='';}
@@ -219,7 +322,7 @@ export function setupAuthListener(){
   supa.auth.onAuthStateChange(async(event,session)=>{
     updateAuthUI(session?.user||null);
     if(session?.user){
-      await Promise.all([loadBudgetFromDB(S.budPh),loadCustomDoses(),loadInventory()]);
+      await Promise.all([loadBudgetFromDB(S.budPh),loadCustomDoses(),loadInventory(),loadReconVials()]);
       window.renderPanels();
     }else{
       // clear customDoses
