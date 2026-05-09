@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peptide Master FATLOSS</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app">
+
+<!-- DOSE EDIT MODAL -->
+<div class="modal-overlay" id="dose-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDoseModal()">✕</button>
+    <div class="modal-title" id="de-title">Edit Dose</div>
+    <div class="de-default" id="de-default"></div>
+    <div class="de-row">
+      <input class="de-input" type="number" id="de-input" min="0" step="0.25"
+        onkeydown="if(event.key==='Enter')confirmDoseEdit()">
+      <span class="de-unit" id="de-unit">mg</span>
+      <span class="de-custom-badge" id="de-custom-badge" style="display:none">✎ Custom</span>
+    </div>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="confirmDoseEdit()">💾 Simpan</button>
+      <button class="modal-btn secondary" onclick="resetDoseEdit()">↺ Reset Default</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeAuthModal()">✕</button>
+    <div class="modal-title">Masuk</div>
+    <div class="modal-sub">Masukkan username dan password lo</div>
+    <input class="modal-input" type="text" id="auth-user" placeholder="Username..." autocomplete="username">
+    <input class="modal-input" type="password" id="auth-pass" placeholder="Password..." autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="modal-err" id="auth-err"></div>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="doLogin()">🔑 Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-ico">🧬</div>
+    <div>
+      <div class="topbar-title">Peptide Master Protocol</div>
+      <div class="topbar-sub">79.5 → 57 kg · Hybrid Power Athlete</div>
+    </div>
+  </div>
+  <div class="topbar-badges">
+  </div>
+  <div id="topbar-timer" style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r2);padding:8px 14px"></div>
+  <div class="auth-wrap">
+    <span class="save-ind" id="save-ind">✓ Tersimpan</span>
+    <span class="auth-user" id="auth-user-label"></span>
+    <button class="auth-btn" id="auth-action-btn" onclick="onAuthBtnClick()">Login</button>
+    <button class="dl-btn" onclick="dlPage()">↓ Save HTML</button>
+  </div>
+</div>
+
+<!-- PHASE SELECTOR -->
+<div class="phase-row" id="phase-row"></div>
+
+<!-- NAV TABS -->
+<div class="tab-nav" id="tab-nav"></div>
+
+<!-- PANELS -->
+<div id="panels-root"></div>
+
+</div><!-- /app -->
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
