@@ -68,10 +68,10 @@ export function pOverview(){
         const st=stLabel(c.prio);
         const isCustom=isCustomDose(c.name,cw);
         return`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;min-width:52px;text-align:center">${CAT[c.cat].n}</span>
+          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
           <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}${isCustom?'<span style="color:var(--hor);font-size:9px;margin-left:3px">✎</span>':''}</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;min-width:52px;text-align:right">${c.dose}${c.unit}</div>
-          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;min-width:56px;text-align:center">${st.l}</span>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;width:60px;text-align:right">${c.dose}${c.unit}</div>
+          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
         </div>`;
       }).join('')
     }`;
@@ -129,13 +129,13 @@ export function pOverview(){
       ${phaseActive.map((c,i)=>{const st=stLabel(c.prio);return`
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
           <div style="font-size:9px;color:var(--t3);width:14px;flex-shrink:0;text-align:right">${i+1}</div>
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;min-width:52px;text-align:center">${CAT[c.cat].n}</span>
-          <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
-          <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden;max-width:100px">
+          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
+          <div style="font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;width:110px">${c.name}</div>
+          <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden">
             <div style="width:${Math.round(c.prio/maxPrio*100)}%;height:100%;background:${scCol(c.prio)};border-radius:3px"></div>
           </div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;min-width:24px;text-align:right">${c.prio}</div>
-          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;min-width:56px;text-align:center">${st.l}</span>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;width:26px;text-align:right">${c.prio}</div>
+          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
         </div>`;}).join('')}
     </div>
     <div class="card">
