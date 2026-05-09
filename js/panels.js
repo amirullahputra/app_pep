@@ -20,11 +20,22 @@ import * as stateModule from './state.js';
 // ──────────────────────────────────────────
 export function pOverview(){
   const ph=S.ph===0?1:S.ph;
-  const phKey=S.ph===0?'tot':`f${ph}`;
+
+  // Tanggal aktual dari W1 = 6 Juli 2026
+  const PROTOCOL_START=new Date('2026-07-06T00:00:00');
+  const weekToDate=(w)=>{
+    const d=new Date(PROTOCOL_START);
+    d.setDate(d.getDate()+(w-1)*7);
+    return d;
+  };
+  const fmtDate=(d)=>d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
 
   const cw=S.currentWeek;
   const cwPhase=phOfW(cw);
   const cwPhaseObj=PHASES[cwPhase-1];
+  const cwStart=weekToDate(cw);
+  const cwEnd=new Date(cwStart);cwEnd.setDate(cwEnd.getDate()+6);
+
   const activeThisWeek=COMPOUNDS.filter(c=>{
     const dose=getDose(c.name,cw);
     return dose!=null&&dose>0;
@@ -32,61 +43,71 @@ export function pOverview(){
     .sort((a,b)=>b.prio-a.prio);
 
   const weekCard=`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <div style="flex:1">
-        <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Minggu Aktif</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button onclick="if(S.currentWeek>1){S.currentWeek--;renderPanels();}" style="width:28px;height:28px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">‹</button>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:800;color:var(--t0);min-width:48px;text-align:center">W${cw}</div>
-          <button onclick="if(S.currentWeek<56){S.currentWeek++;renderPanels();}" style="width:28px;height:28px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">›</button>
-          <div>
-            <div style="font-size:11px;font-weight:800;color:${cwPhaseObj.col}">${cwPhaseObj.name} · ${cwPhaseObj.bf}</div>
-            <div style="font-size:10px;color:var(--t2)">${cwPhaseObj.label} · Defisit ${cwPhaseObj.defisit}</div>
-          </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <button onclick="if(S.currentWeek>1){S.currentWeek--;renderPanels();}" style="width:26px;height:26px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);flex-shrink:0">‹</button>
+        <div style="text-align:center">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:var(--t0);line-height:1">W${cw}</div>
+          <div style="font-size:9px;color:var(--t3);white-space:nowrap">${fmtDate(cwStart)} — ${fmtDate(cwEnd)}</div>
         </div>
+        <button onclick="if(S.currentWeek<56){S.currentWeek++;renderPanels();}" style="width:26px;height:26px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);flex-shrink:0">›</button>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:10px;color:var(--t2);margin-bottom:2px">Aktif minggu ini</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:800;color:${cwPhaseObj.col}">${activeThisWeek.length}</div>
-        <div style="font-size:10px;color:var(--t2)">compounds</div>
+      <div style="flex:1;padding-left:8px;border-left:1px solid var(--bdr)">
+        <div style="font-size:11px;font-weight:800;color:${cwPhaseObj.col}">${cwPhaseObj.name} · ${cwPhaseObj.bf}</div>
+        <div style="font-size:10px;color:var(--t2)">${cwPhaseObj.label} · Defisit ${cwPhaseObj.defisit}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:${cwPhaseObj.col}">${activeThisWeek.length}</div>
+        <div style="font-size:9px;color:var(--t2)">compound aktif</div>
       </div>
     </div>
-    <div style="height:1px;background:var(--bdr);margin-bottom:10px"></div>
+    <div style="height:1px;background:var(--bdr);margin-bottom:8px"></div>
     ${activeThisWeek.length===0
       ?'<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Tidak ada compound aktif minggu ini</div>'
       :activeThisWeek.map(c=>{
         const st=stLabel(c.prio);
         const isCustom=isCustomDose(c.name,cw);
-        return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr)">
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0">${CAT[c.cat].n}</span>
-          <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0)">${c.name}${isCustom?' <span style="color:var(--hor);font-size:9px">✎</span>':''}</div>
-          <div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:var(--t0)">${c.dose}${c.unit}</div>
-          <span class="status-pill ${st.cls}" style="font-size:8.5px">${st.l}</span>
+        return`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">
+          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;min-width:52px;text-align:center">${CAT[c.cat].n}</span>
+          <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}${isCustom?'<span style="color:var(--hor);font-size:9px;margin-left:3px">✎</span>':''}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;min-width:52px;text-align:right">${c.dose}${c.unit}</div>
+          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;min-width:56px;text-align:center">${st.l}</span>
         </div>`;
       }).join('')
     }`;
 
+  // Biaya per kategori
   const cc={};Object.keys(CAT).forEach(k=>cc[k]=0);
   if(S.ph===0){COMPOUNDS.forEach(c=>cc[c.cat]+=totCost(c));}
   else{COMPOUNDS.forEach(c=>cc[c.cat]+=(c.c[`f${S.ph}`]?.cost||0));}
   const mxcc=Math.max(...Object.values(cc),1);
-  const catBars=Object.entries(cc).map(([k,v])=>`
-    <div class="srow">
-      <div class="srow-lbl"><span class="lb ${CAT[k].cls}">${CAT[k].n}</span></div>
-      <div class="srow-bar"><div class="srow-fill" style="width:${v/mxcc*100}%;background:${CAT[k].col}"><span class="srow-txt">${rpM(v)}</span></div></div>
-      <div class="srow-val">${rpM(v)}</div>
+  const catBars=Object.entries(cc).filter(([,v])=>v>0).map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span class="lb ${CAT[k].cls}" style="font-size:8px;min-width:62px;text-align:center;flex-shrink:0">${CAT[k].n}</span>
+      <div style="flex:1;height:16px;background:var(--bg3);border-radius:4px;overflow:hidden">
+        <div style="width:${v/mxcc*100}%;height:100%;background:${CAT[k].col};border-radius:4px"></div>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);flex-shrink:0;min-width:68px;text-align:right">${rpM(v)}</div>
     </div>`).join('');
 
-  const topPrio=[...COMPOUNDS].map(c=>({...c,prio:S.ph===0?Math.round((getPrio(c.name,1)+getPrio(c.name,2)+getPrio(c.name,3))/3):getPrio(c.name,ph)})).sort((a,b)=>b.prio-a.prio).slice(0,8);
-  const topSport=[...COMPOUNDS].sort((a,b)=>sportScore(b.name)-sportScore(a.name)).slice(0,5);
-
+  // Distribusi biaya total
   const f1c=pCost(1),f2c=pCost(2),f3c=pCost(3),tot=f1c+f2c+f3c;
-  const costBar=`<div style="height:14px;border-radius:7px;overflow:hidden;display:flex;margin-bottom:6px;box-shadow:inset 0 1px 3px rgba(0,0,0,.08)">
-    <div style="flex:${f1c/tot};background:var(--f1)" title="F1: ${rpM(f1c)}"></div>
-    <div style="flex:${f2c/tot};background:var(--f2)" title="F2: ${rpM(f2c)}"></div>
-    <div style="flex:${f3c/tot};background:var(--f3)" title="F3: ${rpM(f3c)}"></div>
-  </div>
-  <div style="display:flex;gap:14px">${PHASES.map(p=>`<div style="font-size:10.5px;font-weight:700;color:${p.col}">● ${p.name}: ${rpM(pCost(p.id))}</div>`).join('')}</div>`;
+  const costBar=`
+    <div style="height:12px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:6px">
+      <div style="flex:${f1c/tot};background:var(--f1)"></div>
+      <div style="flex:${f2c/tot};background:var(--f2)"></div>
+      <div style="flex:${f3c/tot};background:var(--f3)"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between">${PHASES.map(p=>`
+      <div style="font-size:10px;font-weight:700;color:${p.col}">● ${p.name}<br><span style="font-family:'JetBrains Mono',monospace">${rpM(pCost(p.id))}</span></div>`).join('')}
+    </div>`;
+
+  // Semua compound aktif di fase — prio > 0
+  const phaseActive=[...COMPOUNDS]
+    .map(c=>({...c,prio:S.ph===0?Math.round((getPrio(c.name,1)+getPrio(c.name,2)+getPrio(c.name,3))/3):getPrio(c.name,ph)}))
+    .filter(c=>c.prio>0)
+    .sort((a,b)=>b.prio-a.prio);
+  const maxPrio=phaseActive[0]?.prio||100;
 
   return `
   <div class="grid2" style="margin-bottom:12px">
@@ -104,13 +125,18 @@ export function pOverview(){
   </div>
   <div class="grid2">
     <div class="card">
-      <div class="card-title"><span class="ico">🏆</span> Top Priority Score — ${S.ph===0?'Rata-rata Semua Fase':'Fase '+ph}</div>
-      ${topPrio.map((c,i)=>{const st=stLabel(c.prio);return`<div class="srow">
-        <div style="font-size:10px;color:var(--t3);width:16px;flex-shrink:0">${i+1}</div>
-        <div class="srow-lbl">${c.name}</div>
-        <div class="srow-bar"><div class="srow-fill" style="width:${c.prio}%;background:${scCol(c.prio)}"><span class="srow-txt">${c.prio}</span></div></div>
-        <span class="status-pill ${st.cls}">${st.l}</span>
-      </div>`;}).join('')}
+      <div class="card-title"><span class="ico">🏆</span> Semua Compound Aktif — ${S.ph===0?'Rata-rata Semua Fase':'Fase '+ph} (${phaseActive.length} aktif)</div>
+      ${phaseActive.map((c,i)=>{const st=stLabel(c.prio);return`
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <div style="font-size:9px;color:var(--t3);width:14px;flex-shrink:0;text-align:right">${i+1}</div>
+          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;min-width:52px;text-align:center">${CAT[c.cat].n}</span>
+          <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
+          <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden;max-width:100px">
+            <div style="width:${Math.round(c.prio/maxPrio*100)}%;height:100%;background:${scCol(c.prio)};border-radius:3px"></div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;min-width:24px;text-align:right">${c.prio}</div>
+          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;min-width:56px;text-align:center">${st.l}</span>
+        </div>`;}).join('')}
     </div>
     <div class="card">
       <div class="card-title"><span class="ico">📦</span> Recap Kebutuhan Vial — ${S.ph===0?'Semua Fase':'Fase '+ph}</div>
