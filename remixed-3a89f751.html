@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peptide Master Protocol v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* LIGHT PALETTE — cerah, optimistis */
+  --bg:#F4F6FA;--bg1:#FFFFFF;--bg2:#F0F2F8;--bg3:#E8ECF5;--bg4:#DDE3F0;
+  --bdr:#D8DFF0;--bdr2:#C4CCE4;--bdr3:#A8B4D4;
+  --t0:#1A2140;--t1:#3A4A6B;--t2:#6B7AA0;--t3:#9AAAC8;
+  --acc:#4361EE;--acc-bg:#EEF1FD;--acc-bdr:rgba(67,97,238,.2);
+  --f1:#FF6B35;--f1-bg:#FFF3EF;--f1-bdr:rgba(255,107,53,.2);
+  --f2:#F59E0B;--f2-bg:#FFFBEB;--f2-bdr:rgba(245,158,11,.2);
+  --f3:#10B981;--f3-bg:#ECFDF5;--f3-bdr:rgba(16,185,129,.2);
+  --hor:#6366F1;--hor-bg:#EEF2FF;--hor-bdr:rgba(99,102,241,.2);
+  --cns:#8B5CF6;--cns-bg:#F5F3FF;--cns-bdr:rgba(139,92,246,.2);
+  --inf:#0EA5E9;--inf-bg:#F0F9FF;--inf-bdr:rgba(14,165,233,.2);
+  --warn:#EF4444;--warn-bg:#FEF2F2;--warn-bdr:rgba(239,68,68,.2);
+  --ok:#10B981;
+  --shadow-sm:0 1px 3px rgba(26,33,64,.08),0 1px 2px rgba(26,33,64,.04);
+  --shadow:0 4px 16px rgba(26,33,64,.10),0 2px 4px rgba(26,33,64,.06);
+  --shadow-lg:0 8px 32px rgba(26,33,64,.12),0 4px 8px rgba(26,33,64,.08);
+  --r:8px;--r2:12px;--r3:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--t0);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:13px;line-height:1.5;min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
+
+/* ── LAYOUT ── */
+.app{max-width:1320px;margin:0 auto;padding:1.75rem 1.5rem 5rem}
+
+/* ── TOP BAR ── */
+.topbar{background:var(--bg1);border-bottom:1px solid var(--bdr);margin:-1.75rem -1.5rem 1.5rem;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow-sm);position:sticky;top:0;z-index:100}
+.topbar-brand{display:flex;align-items:center;gap:10px}
+.topbar-ico{width:32px;height:32px;background:var(--acc);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.topbar-title{font-size:14px;font-weight:800;color:var(--t0);letter-spacing:-.3px}
+.topbar-sub{font-size:10px;color:var(--t2);margin-top:1px}
+.topbar-badges{display:flex;gap:5px;flex-wrap:wrap}
+.bdg{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.2px}
+.bdg-acc{background:var(--acc-bg);color:var(--acc);border:1px solid var(--acc-bdr)}
+.bdg-f1{background:var(--f1-bg);color:var(--f1);border:1px solid var(--f1-bdr)}
+.bdg-f2{background:var(--f2-bg);color:var(--f2);border:1px solid var(--f2-bdr)}
+.bdg-f3{background:var(--f3-bg);color:var(--f3);border:1px solid var(--f3-bdr)}
+.bdg-warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bdr)}
+.dl-btn{background:var(--acc);color:#fff;border:none;padding:8px 16px;border-radius:var(--r);font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap;box-shadow:0 2px 8px rgba(67,97,238,.3)}
+.dl-btn:hover{background:#3451d1;transform:translateY(-1px)}
+
+/* ── METRIC CARDS ── */
+.metric-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:1.25rem}
+.mc{background:var(--bg1);border:2px solid var(--bdr);border-radius:var(--r2);padding:1rem;cursor:pointer;transition:all .2s;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.mc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;border-radius:0 0 10px 10px;background:transparent;transition:background .2s}
+.mc:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--bdr2)}
+.mc.act{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-bg),var(--shadow)}
+.mc.act::after{background:var(--acc)}
+.mc.mc-grand{background:linear-gradient(135deg,#4361EE 0%,#7C3AED 100%);border-color:transparent;color:#fff}
+.mc.mc-grand .mc-l{color:rgba(255,255,255,.7)}
+.mc.mc-grand .mc-v{color:#fff}
+.mc.mc-grand .mc-s{color:rgba(255,255,255,.6)}
+.mc.mc-grand::after{background:rgba(255,255,255,.3)}
+.mc.mc-f1{border-color:var(--f1-bdr)}
+.mc.mc-f1.act{border-color:var(--f1);box-shadow:0 0 0 3px var(--f1-bg),var(--shadow)}
+.mc.mc-f1::after{background:transparent}.mc.mc-f1.act::after{background:var(--f1)}
+.mc.mc-f2{border-color:var(--f2-bdr)}
+.mc.mc-f2.act{border-color:var(--f2);box-shadow:0 0 0 3px var(--f2-bg),var(--shadow)}
+.mc.mc-f2::after{background:transparent}.mc.mc-f2.act::after{background:var(--f2)}
+.mc.mc-f3{border-color:var(--f3-bdr)}
+.mc.mc-f3.act{border-color:var(--f3);box-shadow:0 0 0 3px var(--f3-bg),var(--shadow)}
+.mc.mc-f3::after{background:transparent}.mc.mc-f3.act::after{background:var(--f3)}
+.mc-l{font-size:9.5px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.mc-v{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;color:var(--t0);line-height:1;margin-bottom:4px}
+.mc-v.sm{font-size:15px}
+.mc-s{font-size:10px;color:var(--t2);line-height:1.4}
+.mc-pill{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:5px}
+.mc-arrow{position:absolute;top:10px;right:10px;font-size:11px;color:var(--t3);transition:all .2s}
+.mc:hover .mc-arrow,.mc.act .mc-arrow{color:var(--acc);transform:translateX(2px)}
+
+/* ── PHASE CARDS ── */
+.phase-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
+.ph-card{background:var(--bg1);border:2px solid var(--bdr);border-radius:var(--r2);padding:1rem 1.125rem;cursor:pointer;transition:all .2s;box-shadow:var(--shadow-sm)}
+.ph-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.ph-card.sel-f1{border-color:var(--f1);background:var(--f1-bg);box-shadow:0 0 0 3px rgba(255,107,53,.12),var(--shadow)}
+.ph-card.sel-f2{border-color:var(--f2);background:var(--f2-bg);box-shadow:0 0 0 3px rgba(245,158,11,.12),var(--shadow)}
+.ph-card.sel-f3{border-color:var(--f3);background:var(--f3-bg);box-shadow:0 0 0 3px rgba(16,185,129,.12),var(--shadow)}
+.ph-tag{font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.ph-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ph-name{font-size:14px;font-weight:800;color:var(--t0);margin-bottom:2px}
+.ph-desc{font-size:11px;color:var(--t2);margin-bottom:10px}
+.ph-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ph-stat{background:rgba(255,255,255,.6);border-radius:var(--r);padding:.5rem;border:1px solid rgba(0,0,0,.04)}
+.ph-stat-l{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.ph-stat-v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--t0)}
+.ph-bar{height:4px;border-radius:2px;background:var(--bg3);margin-top:10px;overflow:hidden}
+.ph-bar-fill{height:100%;border-radius:2px}
+
+/* ── TAB NAV ── */
+.tab-nav{display:flex;gap:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:4px;margin-bottom:1.25rem;overflow-x:auto;box-shadow:var(--shadow-sm)}
+.tab-btn{flex:1;min-width:max-content;padding:8px 14px;font-size:11.5px;font-weight:700;cursor:pointer;border:1px solid transparent;border-radius:var(--r);color:var(--t2);background:transparent;text-align:center;transition:all .15s;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px}
+.tab-btn:hover:not(.act){color:var(--t1);background:var(--bg2)}
+.tab-btn.act{color:#fff;background:var(--acc);border-color:var(--acc);box-shadow:0 2px 8px rgba(67,97,238,.3)}
+
+/* ── PANEL ── */
+.panel{display:none}.panel.act{display:block}
+
+/* ── CARD ── */
+.card{background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:1rem 1.125rem;box-shadow:var(--shadow-sm)}
+.card-title{font-size:10.5px;font-weight:800;color:var(--t1);text-transform:uppercase;letter-spacing:.6px;margin-bottom:.875rem;display:flex;align-items:center;gap:6px}
+.card-title .ico{font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+
+/* ── LAYER BADGE ── */
+.lb{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.l-off{background:var(--f1-bg);color:var(--f1);border:1px solid var(--f1-bdr)}
+.l-met{background:var(--f2-bg);color:var(--f2);border:1px solid var(--f2-bdr)}
+.l-def{background:var(--f3-bg);color:var(--f3);border:1px solid var(--f3-bdr)}
+.l-hor{background:var(--hor-bg);color:var(--hor);border:1px solid var(--hor-bdr)}
+.l-cns{background:var(--cns-bg);color:var(--cns);border:1px solid var(--cns-bdr)}
+.l-inf{background:var(--inf-bg);color:var(--inf);border:1px solid var(--inf-bdr)}
+
+/* ── SCORE PILLS ── */
+.spill{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;min-width:32px;text-align:center}
+.sp-h{background:#DCFCE7;color:#15803D}
+.sp-m{background:#FEF9C3;color:#92400E}
+.sp-l{background:#FEE2E2;color:#B91C1C}
+.sp-o{background:var(--bg3);color:var(--t3)}
+.status-pill{font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.st-wajib{background:#DCFCE7;color:#15803D}
+.st-opsional{background:#FEF9C3;color:#92400E}
+.st-rendah{background:#FEE2E2;color:#B91C1C}
+.st-off{background:var(--bg3);color:var(--t3)}
+
+/* ── SROW ── */
+.srow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.srow-lbl{font-size:11px;font-weight:500;color:var(--t1);width:140px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow-bar{flex:1;height:18px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.srow-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;transition:width .5s ease}
+.srow-txt{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:rgba(255,255,255,.9);font-weight:600}
+.srow-val{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;min-width:34px;text-align:right;color:var(--t1)}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--bdr);border-radius:var(--r2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:8px 10px;font-size:9.5px;font-weight:800;color:var(--t2);background:var(--bg2);border-bottom:1px solid var(--bdr2);white-space:nowrap;text-align:left;text-transform:uppercase;letter-spacing:.4px}
+th.r,td.r{text-align:right}th.c,td.c{text-align:center}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg2)}
+.tbl-foot td{background:var(--bg2);border-top:2px solid var(--bdr2);font-weight:700}
+.cost-v{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--acc)}
+.zero{color:var(--t3)}
+
+/* ── VIAL CARDS ── */
+.vial-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;align-items:center;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:.75rem 1rem;box-shadow:var(--shadow-sm)}
+.vf-lbl{font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;margin-right:4px}
+.vf-btn{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid var(--bdr2);background:var(--bg2);color:var(--t2);cursor:pointer;transition:all .15s;font-family:'Plus Jakarta Sans',sans-serif}
+.vf-btn:hover{border-color:var(--acc);color:var(--acc)}
+.vf-btn.act{background:var(--acc);color:#fff;border-color:var(--acc);box-shadow:0 2px 6px rgba(67,97,238,.25)}
+.vf-sep{width:1px;height:20px;background:var(--bdr2);margin:0 4px}
+.vial-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.vcard{background:var(--bg1);border:2px solid var(--bdr);border-radius:var(--r2);overflow:hidden;transition:all .2s;box-shadow:var(--shadow-sm)}
+.vcard:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--bdr2)}
+.vcard-hdr{padding:.75rem 1rem;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
+.vcard-name{font-size:13px;font-weight:800;color:var(--t0)}
+.vcard-price{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--t2)}
+.vcard-price strong{color:var(--acc);font-size:13px}
+.vcard-body{padding:.75rem 1rem}
+.vcard-spec{display:flex;align-items:center;gap:6px;margin-bottom:.75rem;flex-wrap:wrap}
+.spec-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--bg2);color:var(--t1);border:1px solid var(--bdr)}
+.vcard-phase-row{display:flex;gap:6px;margin-bottom:.625rem}
+.vph{flex:1;border-radius:var(--r);padding:.5rem;text-align:center;border:1px solid transparent}
+.vph.has{border-color:var(--bdr2);background:var(--bg2)}
+.vph.none{opacity:.35;background:var(--bg3)}
+.vph-name{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.vph-v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700}
+.vph-sub{font-size:8.5px;color:var(--t2);margin-top:1px}
+.vcard-totbar{margin-top:.625rem}
+.vcard-totbar-lbl{display:flex;justify-content:space-between;margin-bottom:3px}
+.vcard-totbar-lbl span{font-size:10px;color:var(--t2)}
+.vcard-totbar-lbl strong{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0)}
+.vbar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.vbar-fill{height:100%;border-radius:3px}
+.eff-badge{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;margin-top:5px}
+.eff-hi{background:#DCFCE7;color:#15803D}
+.eff-mid{background:#FEF9C3;color:#92400E}
+.eff-lo{background:#FEE2E2;color:#B91C1C}
+
+/* ── VIAL SUMMARY ── */
+.vial-summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem}
+.vs-card{background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:.875rem 1rem;box-shadow:var(--shadow-sm)}
+.vs-l{font-size:9.5px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.vs-v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t0);line-height:1}
+.vs-s{font-size:10px;color:var(--t2);margin-top:3px}
+
+/* ── GANTT ── */
+.gantt-wrap{overflow-x:auto}
+.gantt-grid{min-width:860px}
+.gantt-ph-row{display:flex;margin-left:152px;gap:1px;margin-bottom:5px}
+.gantt-ph-seg{border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:.4px;height:18px}
+.gantt-wk-row{display:flex;margin-left:152px;gap:1px;margin-bottom:6px}
+.gantt-wk{flex:1;font-size:7.5px;color:var(--t3);text-align:center}
+.g-row{display:flex;align-items:center;gap:1px;margin-bottom:2px}
+.g-lbl{width:152px;font-size:10.5px;font-weight:600;color:var(--t1);flex-shrink:0;padding-right:8px;display:flex;align-items:center;gap:4px;overflow:hidden}
+.g-cells{display:flex;gap:1px;flex:1}
+.g-cell{flex:1;height:18px;border-radius:2px;min-width:0;cursor:default;position:relative}
+.g-cell:hover .g-tip{display:block}
+.g-tip{display:none;position:absolute;bottom:calc(100%+4px);left:50%;transform:translateX(-50%);background:var(--t0);color:#fff;font-size:9.5px;padding:3px 7px;border-radius:4px;white-space:nowrap;z-index:50;pointer-events:none}
+.g-off{background:var(--bg3)}
+.g-1{background:rgba(255,107,53,.35)}
+.g-2{background:rgba(245,158,11,.35)}
+.g-3{background:rgba(16,185,129,.35)}
+.g-1.w{background:var(--f1)}
+.g-2.w{background:var(--f2)}
+.g-3.w{background:var(--f3)}
+
+/* ── BUDGET ── */
+.bud-controls{background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:1rem;margin-bottom:12px;box-shadow:var(--shadow-sm)}
+.bud-val-row{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.bud-val{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--acc);line-height:1}
+.bud-lbl{font-size:11px;color:var(--t2)}
+input[type=range]{width:100%;accent-color:var(--acc);cursor:pointer;height:4px}
+.ph-toggle-row{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.ph-tgl{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid var(--bdr2);background:var(--bg2);color:var(--t2);cursor:pointer;transition:all .15s;font-family:'Plus Jakarta Sans',sans-serif}
+.ph-tgl.tf1{background:var(--f1-bg);color:var(--f1);border-color:var(--f1)}
+.ph-tgl.tf2{background:var(--f2-bg);color:var(--f2);border-color:var(--f2)}
+.ph-tgl.tf3{background:var(--f3-bg);color:var(--f3);border-color:var(--f3)}
+.auto-btn{margin-left:auto;background:var(--acc);color:#fff;border:none;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;box-shadow:0 2px 6px rgba(67,97,238,.25)}
+.bud-progress{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r2);padding:.875rem 1rem;margin-bottom:12px}
+.bud-prog-bar{height:12px;border-radius:6px;background:var(--bg3);overflow:hidden;margin:8px 0 4px}
+.bud-prog-fill{height:100%;border-radius:6px;transition:width .3s,background .3s}
+
+/* CONFLICT BANNER */
+.conflict-banner{padding:.875rem 1rem;border-radius:var(--r2);margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;border:1.5px solid transparent}
+.cb-ok{background:var(--f3-bg);border-color:var(--f3-bdr)}
+.cb-warn{background:var(--warn-bg);border-color:var(--warn-bdr)}
+.cb-ico{font-size:20px;flex-shrink:0}
+.cb-title{font-size:12px;font-weight:800;margin-bottom:3px}
+.cb-ok .cb-title{color:var(--f3)}.cb-warn .cb-title{color:var(--warn)}
+.cb-list{font-size:11px;color:var(--t1)}
+
+/* BOPT ROW */
+.bopt-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr)}
+.bopt-row:last-child{border-bottom:none}
+.bopt-row.in-conflict{background:rgba(239,68,68,.04);border-radius:var(--r);padding:7px 8px;margin:0 -8px;border-bottom:1px solid var(--bdr)}
+.chk{flex-shrink:0;width:18px;height:18px;border-radius:5px;border:2px solid var(--bdr2);background:var(--bg2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.chk.on{background:var(--acc);border-color:var(--acc)}
+.chk.on::after{content:'✓';font-size:11px;color:#fff;font-weight:800}
+.bopt-info{flex:1;min-width:0}
+.bopt-name{font-size:12px;font-weight:700;color:var(--t0)}
+.bopt-sub{font-size:10px;color:var(--t2);display:flex;gap:6px;margin-top:2px;flex-wrap:wrap;align-items:center}
+.bopt-cost{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--acc);flex-shrink:0}
+
+/* LIVE ALERT */
+.live-alert{border-radius:var(--r);padding:.75rem .875rem;margin-bottom:7px;border-left:3px solid transparent}
+.la-high{background:var(--warn-bg);border-color:var(--warn)}
+.la-med{background:var(--f2-bg);border-color:var(--f2)}
+.la-low{background:var(--hor-bg);border-color:var(--hor)}
+.la-ok{background:var(--f3-bg);border-color:var(--f3);opacity:.6}
+.la-title{font-size:11.5px;font-weight:800;margin-bottom:3px}
+.la-high .la-title{color:var(--warn)}.la-med .la-title{color:var(--f2)}.la-low .la-title{color:var(--hor)}.la-ok .la-title{color:var(--f3)}
+.la-body{font-size:10.5px;color:var(--t1);line-height:1.6}
+.la-rec{font-size:10.5px;color:var(--f3);font-weight:600;margin-top:4px}
+.la-cmps{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}
+.la-cmp{font-size:10px;padding:2px 7px;border-radius:4px;background:var(--bg3);color:var(--t1);font-weight:600}
+.la-cmp.hit{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bdr)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;animation:pulse 1.5s infinite}
+
+/* SPORT DIMS */
+.sport-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+.sp-card{background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:.875rem;text-align:center;box-shadow:var(--shadow-sm)}
+.sp-ico{font-size:22px;margin-bottom:5px}
+.sp-name{font-size:10px;font-weight:700;color:var(--t1);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.sp-sub{font-size:9px;color:var(--t2);margin-bottom:8px}
+.sp-val{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--acc)}
+.sp-bar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:6px}
+.sp-bar-fill{height:100%;border-radius:2px;background:var(--acc)}
+.sp-top{font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5}
+
+/* CMP CARD */
+.cmp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.cmp-card{background:var(--bg1);border:2px solid var(--bdr);border-radius:var(--r2);overflow:hidden;transition:all .2s;box-shadow:var(--shadow-sm)}
+.cmp-card:hover{border-color:var(--bdr2);transform:translateY(-2px);box-shadow:var(--shadow)}
+.cmp-hdr{padding:.75rem 1rem;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cmp-name{font-size:12.5px;font-weight:800;color:var(--t0);margin-top:3px}
+.cmp-body{padding:.75rem 1rem}
+.cmp-scores{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:.625rem}
+.cmp-sc{background:var(--bg2);border-radius:var(--r);padding:.4rem;text-align:center;border:1px solid var(--bdr)}
+.cmp-sc-lbl{font-size:8.5px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+.cmp-sc-v{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700}
+.pips{display:flex;gap:2px}
+.pip{width:10px;height:10px;border-radius:3px}
+.pip-on{background:var(--acc)}.pip-off{background:var(--bg3);border:1px solid var(--bdr)}
+.cmp-sport-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.cmp-sl{font-size:9.5px;color:var(--t2);width:62px;flex-shrink:0}
+.cmp-mech{font-size:10px;color:var(--t2);line-height:1.6;border-top:1px solid var(--bdr);padding-top:.5rem;margin-top:.5rem}
+.tag{font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--bg3);color:var(--t2)}
+.tag-ok{background:#DCFCE7;color:#15803D}
+.tag-warn{background:var(--warn-bg);color:var(--warn)}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;gap:5px;margin-bottom:.875rem;flex-wrap:wrap;align-items:center}
+.fl{font-size:9.5px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+.fp{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--bdr2);background:var(--bg2);color:var(--t2);cursor:pointer;transition:all .15s}
+.fp.act{background:var(--acc);color:#fff;border-color:var(--acc)}
+.fp .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.srch{background:var(--bg1);border:1.5px solid var(--bdr2);border-radius:var(--r);padding:5px 12px;font-size:12px;color:var(--t0);font-family:'Plus Jakarta Sans',sans-serif;outline:none;width:180px;transition:.15s}
+.srch:focus{border-color:var(--acc)}
+.srch::placeholder{color:var(--t3)}
+
+/* ── LW VIZ ── */
+.lw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lw-card{background:var(--bg2);border-radius:var(--r);padding:.75rem;border:1px solid var(--bdr)}
+.lw-ph{font-size:10px;font-weight:800;margin-bottom:.5rem}
+.lw-row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.lw-n{font-size:9.5px;font-weight:600;color:var(--t1);width:62px;flex-shrink:0}
+.lw-bar{flex:1;height:7px;background:var(--bg4);border-radius:3px;overflow:hidden}
+.lw-fill{height:100%;border-radius:3px}
+.lw-pct{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;color:var(--t1);min-width:24px;text-align:right}
+
+/* ── NOTE ── */
+.note{font-size:10.5px;color:var(--t2);padding:.625rem .875rem;background:var(--bg2);border-radius:var(--r);border:1px solid var(--bdr);line-height:1.6;margin-top:.75rem}
+.note-warn{background:var(--warn-bg);border-color:var(--warn-bdr);color:var(--t1)}
+.sep{height:1px;background:var(--bdr);margin:.875rem 0}
+
+@media(max-width:1000px){.metric-strip{grid-template-columns:repeat(4,1fr)}.phase-row{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.sport-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.metric-strip{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-ico">🧬</div>
+    <div>
+      <div class="topbar-title">Peptide Master Protocol</div>
+      <div class="topbar-sub">79.5 → ~57 kg · Target 6% BF · 56W · 26 Compounds · Hybrid Power Athlete</div>
+    </div>
+  </div>
+  <div class="topbar-badges">
+    <span class="bdg bdg-acc">v3</span>
+    <span class="bdg bdg-f1">F1 W1–28</span>
+    <span class="bdg bdg-f2">F2 W29–44</span>
+    <span class="bdg bdg-f3">F3 W45–56</span>
+    <span class="bdg bdg-warn">Live Conflict</span>
+  </div>
+  <button class="dl-btn" onclick="dlPage()">↓ Save HTML</button>
+</div>
+
+<!-- METRIC CARDS (clickable → jump to tab) -->
+<div class="metric-strip" id="metric-strip"></div>
+
+<!-- PHASE SELECTOR -->
+<div class="phase-row" id="phase-row"></div>
+
+<!-- NAV TABS -->
+<div class="tab-nav" id="tab-nav"></div>
+
+<!-- PANELS -->
+<div id="panels-root"></div>
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════
+
+const PHASES=[
+  {id:1,cls:'f1',name:'Fase 1',bf:'>15% BF',wS:1,wE:28,wk:28,defisit:'500–750 kcal',label:'Offensive Dominant',desc:'Aggressive cut. Offensive layer 40%. Cardio volume max.',col:'var(--f1)',selCls:'sel-f1'},
+  {id:2,cls:'f2',name:'Fase 2',bf:'15–10% BF',wS:29,wE:44,wk:16,defisit:'350–500 kcal',label:'Transisi Kritis',desc:'Balancing offensive–defensive. Hormonal axis entry.',col:'var(--f2)',selCls:'sel-f2'},
+  {id:3,cls:'f3',name:'Fase 3',bf:'10–6% BF',wS:45,wE:56,wk:12,defisit:'200–300 kcal',label:'Precision Defense',desc:'Muscle rescue mode. Hormonal + defensive dominan.',col:'var(--f3)',selCls:'sel-f3'},
+];
+
+const CAT={
+  off:{n:'Fat Loss',cls:'l-off',col:'var(--f1)'},
+  met:{n:'Metabolic',cls:'l-met',col:'var(--f2)'},
+  def:{n:'Recovery',cls:'l-def',col:'var(--f3)'},
+  hor:{n:'Hormonal',cls:'l-hor',col:'var(--hor)'},
+  cns:{n:'CNS/Sleep',cls:'l-cns',col:'var(--cns)'},
+  inf:{n:'Support',cls:'l-inf',col:'var(--inf)'},
+};
+
+const LW={
+  off:{f1:40,f2:25,f3:10,col:'var(--f1)',n:'Offensive'},
+  met:{f1:20,f2:12,f3:7, col:'var(--f2)',n:'Metabolic'},
+  def:{f1:8, f2:20,f3:25,col:'var(--f3)',n:'Defensive'},
+  hor:{f1:7, f2:15,f3:22,col:'var(--hor)',n:'Hormonal'},
+  cns:{f1:10,f2:13,f3:18,col:'var(--cns)',n:'CNS/Sleep'},
+  inf:{f1:15,f2:15,f3:18,col:'var(--inf)',n:'Support'},
+};
+
+// Priority scores
+const SC={
+  'Retatrutide':    {f1:{r:95,p:95},f2:{r:65,p:65},f3:{r:15,p:6}},
+  'AOD-9604':       {f1:{r:85,p:85},f2:{r:70,p:70},f3:{r:80,p:32}},
+  'Tesamorelin':    {f1:{r:80,p:80},f2:{r:75,p:75},f3:{r:70,p:28}},
+  '5-Amino-1MQ':    {f1:{r:78,p:78},f2:{r:55,p:55},f3:{r:30,p:12}},
+  'Cagrilintide':   {f1:{r:72,p:72},f2:{r:58,p:58},f3:{r:10,p:4}},
+  'SLU-PP-332':     {f1:{r:75,p:38},f2:{r:68,p:33},f3:{r:40,p:11}},
+  'MOTS-c':         {f1:{r:82,p:41},f2:{r:78,p:37},f3:{r:65,p:18}},
+  'NAD+':           {f1:{r:65,p:33},f2:{r:60,p:29},f3:{r:68,p:19}},
+  'ARA-290':        {f1:{r:40,p:15},f2:{r:60,p:36},f3:{r:70,p:50}},
+  'BPC-157':        {f1:{r:60,p:23},f2:{r:78,p:47},f3:{r:88,p:63}},
+  'CJC-1295+IPA':   {f1:{r:55,p:11},f2:{r:72,p:58},f3:{r:78,p:78}},
+  'IGF-1 LR3':      {f1:{r:25,p:5}, f2:{r:60,p:48},f3:{r:80,p:80}},
+  'TB-500':         {f1:{r:50,p:19},f2:{r:72,p:43},f3:{r:85,p:61}},
+  'HCG':            {f1:{r:15,p:3}, f2:{r:40,p:24},f3:{r:88,p:78}},
+  'HGH':            {f1:{r:40,p:8}, f2:{r:55,p:44},f3:{r:78,p:78}},
+  'HMG':            {f1:{r:10,p:2}, f2:{r:25,p:15},f3:{r:72,p:63}},
+  'Kisspeptin-10':  {f1:{r:35,p:6}, f2:{r:75,p:45},f3:{r:88,p:78}},
+  'PT-141':         {f1:{r:30,p:5}, f2:{r:60,p:36},f3:{r:65,p:57}},
+  'DSIP':           {f1:{r:60,p:15},f2:{r:65,p:34},f3:{r:82,p:59}},
+  'Epitalon':       {f1:{r:65,p:16},f2:{r:70,p:36},f3:{r:82,p:59}},
+  'Selank':         {f1:{r:35,p:9}, f2:{r:65,p:34},f3:{r:78,p:56}},
+  'Semax':          {f1:{r:30,p:8}, f2:{r:55,p:29},f3:{r:75,p:54}},
+  'GHK-Cu':         {f1:{r:35,p:13},f2:{r:50,p:30},f3:{r:72,p:52}},
+  'KPV':            {f1:{r:65,p:24},f2:{r:45,p:27},f3:{r:30,p:22}},
+  'SS-31':          {f1:{r:80,p:30},f2:{r:75,p:45},f3:{r:85,p:61}},
+  'Thymosan a-1':   {f1:{r:30,p:11},f2:{r:45,p:27},f3:{r:70,p:50}},
+};
+
+// Sport Profile: z2=Zone2, pw=Power, rc=Recovery, hr=Hormonal, cn=CNS  (0-5)
+const SP={
+  'Retatrutide':   {z2:2,pw:2,rc:1,hr:2,cn:1,risk:'GI risk — pause 2h sebelum cardio intens'},
+  'AOD-9604':      {z2:4,pw:3,rc:2,hr:1,cn:1,risk:''},
+  'Tesamorelin':   {z2:4,pw:3,rc:2,hr:2,cn:1,risk:'GH axis — max 2 dari 3 (Tesam+CJC+HGH)'},
+  '5-Amino-1MQ':   {z2:3,pw:2,rc:1,hr:1,cn:2,risk:''},
+  'Cagrilintide':  {z2:1,pw:1,rc:1,hr:1,cn:1,risk:'Gabung Reta full dose → protein defisit'},
+  'SLU-PP-332':    {z2:5,pw:3,rc:2,hr:1,cn:2,risk:''},
+  'MOTS-c':        {z2:5,pw:4,rc:3,hr:1,cn:2,risk:''},
+  'NAD+':          {z2:3,pw:3,rc:3,hr:1,cn:2,risk:''},
+  'ARA-290':       {z2:2,pw:2,rc:4,hr:1,cn:3,risk:''},
+  'BPC-157':       {z2:2,pw:2,rc:5,hr:1,cn:1,risk:'Double dose jika +TB-500 standalone'},
+  'CJC-1295+IPA':  {z2:3,pw:4,rc:4,hr:3,cn:2,risk:'GH axis — max 2 dari 3'},
+  'IGF-1 LR3':     {z2:2,pw:4,rc:4,hr:2,cn:1,risk:'Hypoglycemia. Butuh protein ≥2g/kg'},
+  'TB-500':        {z2:2,pw:2,rc:5,hr:1,cn:1,risk:'Double dose jika +BPC-157 standalone'},
+  'HCG':           {z2:1,pw:3,rc:2,hr:5,cn:2,risk:'HPG over-stim jika stack 3'},
+  'HGH':           {z2:3,pw:4,rc:3,hr:3,cn:1,risk:'GH axis — max 2 dari 3'},
+  'HMG':           {z2:1,pw:2,rc:1,hr:4,cn:1,risk:'Konfirmasi bloodwork FSH/LH dulu'},
+  'Kisspeptin-10': {z2:2,pw:3,rc:2,hr:5,cn:2,risk:'HPG over-stim jika stack 3'},
+  'PT-141':        {z2:1,pw:2,rc:1,hr:3,cn:3,risk:''},
+  'DSIP':          {z2:2,pw:1,rc:4,hr:1,cn:4,risk:''},
+  'Epitalon':      {z2:2,pw:2,rc:4,hr:2,cn:4,risk:''},
+  'Selank':        {z2:3,pw:1,rc:3,hr:1,cn:5,risk:'Selank sore/malam jika stack Semax'},
+  'Semax':         {z2:2,pw:2,rc:2,hr:1,cn:5,risk:'Semax pagi jika stack Selank'},
+  'GHK-Cu':        {z2:1,pw:1,rc:3,hr:1,cn:1,risk:''},
+  'KPV':           {z2:1,pw:1,rc:3,hr:1,cn:1,risk:''},
+  'SS-31':         {z2:5,pw:4,rc:4,hr:1,cn:2,risk:''},
+  'Thymosan a-1':  {z2:1,pw:1,rc:3,hr:1,cn:1,risk:''},
+};
+
+const MECHS={
+  'Retatrutide':'Triple agonist GLP-1/GIP/Glucagon → lipolysis + satiety + insulin sensitivity',
+  'AOD-9604':'GH fragment 177–191 → targeted lipolysis tanpa IGF-1 activation',
+  'Tesamorelin':'GHRH analog → visceral fat attack + GH axis stimulation (AM fasted)',
+  '5-Amino-1MQ':'NNMT inhibitor → NAD+ upstream → dormant fat cell activation',
+  'Cagrilintide':'Amylin analog → extended satiety + gastric emptying modulation',
+  'SLU-PP-332':'PPARδ agonist → fat oxidation amplifier + mitokondrial biogenesis',
+  'MOTS-c':'AMPK activation → fat oxidation + insulin sensitization + endurance output',
+  'NAD+':'Sirtuins substrate → upstream MOTS-c + 5-Amino + ATP energy currency',
+  'ARA-290':'Innate repair receptor → peripheral neuroprotection + anti-inflammatory',
+  'BPC-157':'Gut + systemic healing → tendon/ligament repair + gut barrier integrity',
+  'CJC-1295+IPA':'GHRH + GHRP → GH pulse amplification → anabolic + recovery',
+  'IGF-1 LR3':'Long-acting IGF-1 (20-30h) → MPS + anti-catabolism; protein ≥2g/kg',
+  'TB-500':'Thymosin Beta-4 → actin polymerization + tissue repair + hip/knee joints',
+  'HCG':'LH analog → testicular Leydig cell stimulation, bypass pituitary',
+  'HGH':'Full GH → body composition + lipolysis + IGF-1 via liver',
+  'HMG':'FSH + LH analog → spermatogenesis + testicular volume; butuh bloodwork',
+  'Kisspeptin-10':'KNDy neuron → GnRH pulsatility → LH/FSH → testosterone upstream HPG',
+  'PT-141':'Melanocortin → libido + motivation via CNS dopaminergic',
+  'DSIP':'Delta sleep peptide → sleep deepening + cortisol normalization',
+  'Epitalon':'Telomerase activator + pineal → sleep architecture + nocturnal GH pulse',
+  'Selank':'GABA modulation + cortisol attenuation; HPA axis dampening (sore/malam)',
+  'Semax':'ACTH 4-7 → BDNF + cognitive clarity; combats brain fog from low carbs',
+  'GHK-Cu':'Copper peptide → collagen synthesis + anti-inflammatory + skin integrity',
+  'KPV':'Anti-inflammatory tripeptide → NF-κB inhibition; adipose tissue recovery',
+  'SS-31':'Mitochondrial cardiolipin → ROS reduction + ETC efficiency (Zone 2 kritis)',
+  'Thymosan a-1':'Thymic peptide → T-cell activation; immune protection prolonged deficit',
+};
+
+// Vial specs — basis harga dari final.xlsx
+const VSPECS={
+  '5-Amino-1MQ': {unit:'mg',vSize:50, vPrice:900000, label:'50mg/vial'},
+  'AOD-9604':    {unit:'mg',vSize:10, vPrice:1300000,label:'10mg/vial'},
+  'Cagrilintide':{unit:'mg',vSize:10, vPrice:800000, label:'10mg/vial'},
+  'Retatrutide': {unit:'mg',vSize:20, vPrice:1200000,label:'20mg/vial'},
+  'Tesamorelin': {unit:'mg',vSize:40, vPrice:1500000,label:'40mg/vial'},  // ≈ from xlsx tot/vial
+  'MOTS-c':      {unit:'mg',vSize:40, vPrice:1400000,label:'40mg/vial'},
+  'NAD+':        {unit:'mg',vSize:1000,vPrice:800000,label:'1000mg/vial'},
+  'SLU-PP-332':  {unit:'mg',vSize:2000,vPrice:4000000,label:'100 tab (20mg)'},
+  'ARA-290':     {unit:'mg',vSize:10, vPrice:850000, label:'10mg/vial'},
+  'BPC-157':     {unit:'mg',vSize:10, vPrice:650000, label:'10mg/vial'},
+  'CJC-1295+IPA':{unit:'mg',vSize:10, vPrice:800000, label:'10mg/vial'},
+  'IGF-1 LR3':   {unit:'mg',vSize:1,  vPrice:1350000,label:'1mg/vial'},
+  'TB-500':      {unit:'mg',vSize:10, vPrice:750000, label:'10mg/vial'},
+  'HCG':         {unit:'IU',vSize:10000,vPrice:800000,label:'10,000 IU/vial'},
+  'HGH':         {unit:'IU',vSize:36, vPrice:700000, label:'36 IU/vial'},
+  'HMG':         {unit:'IU',vSize:75, vPrice:650000, label:'75 IU/vial'},
+  'Kisspeptin-10':{unit:'mg',vSize:10,vPrice:900000, label:'10mg/vial'},
+  'PT-141':      {unit:'mg',vSize:10, vPrice:600000, label:'10mg/vial'},
+  'DSIP':        {unit:'mg',vSize:10, vPrice:600000, label:'10mg/vial'},
+  'Epitalon':    {unit:'mg',vSize:50, vPrice:1000000,label:'50mg/vial'},
+  'Selank':      {unit:'mg',vSize:10, vPrice:500000, label:'10mg/vial'},
+  'Semax':       {unit:'mg',vSize:10, vPrice:500000, label:'10mg/vial'},
+  'GHK-Cu':      {unit:'mg',vSize:100,vPrice:350000, label:'100mg/vial'},
+  'KPV':         {unit:'mg',vSize:10, vPrice:600000, label:'10mg/vial'},
+  'SS-31':       {unit:'mg',vSize:50, vPrice:1500000,label:'50mg/vial'},
+  'Thymosan a-1':{unit:'mg',vSize:10, vPrice:1100000,label:'10mg/vial'},
+};
+
+// Compound data from XLSX — doses per week + costs per phase
+const COMPOUNDS=[
+  {name:'5-Amino-1MQ',cat:'off',d:{1:3.5,2:3.5,3:7,4:7,5:10.5,6:10.5,7:17.5,8:17.5,9:28,10:28,11:35,12:35,17:3.5,18:3.5,19:7,20:7,21:10.5,22:10.5,23:17.5,24:17.5,25:28,26:28,27:35,28:35,33:3.5,34:3.5,35:7,36:7,37:10.5,38:10.5,39:17.5,40:17.5},c:{f1:{mg:406,v:8,cost:7200000},f2:{mg:77,v:2,cost:1800000},f3:{mg:0,v:0,cost:0},tot:{mg:483,v:10,cost:9000000}}},
+  {name:'AOD-9604',cat:'off',d:{1:1.75,2:1.75,3:2.1,4:2.1,5:3.5,6:3.5,7:3.5,8:3.5,9:5.25,10:5.25,11:5.25,12:5.25,17:1.75,18:1.75,19:2.1,20:2.1,21:3.5,22:3.5,23:3.5,24:3.5,25:5.25,26:5.25,27:5.25,28:5.25,33:1.75,34:1.75,35:2.1,36:2.1,37:3.5,38:3.5,39:3.5,40:3.5,41:5.25,42:5.25,43:5.25,44:5.25,45:5.25,46:5.25,47:5.25,48:5.25,49:5.25,50:5.25,51:5.25,52:5.25,53:5.25,54:5.25,55:5.25,56:5.25},c:{f1:{mg:85.4,v:9,cost:11700000},f2:{mg:42.7,v:4,cost:5200000},f3:{mg:63,v:6,cost:7800000},tot:{mg:191.1,v:19,cost:24700000}}},
+  {name:'Cagrilintide',cat:'off',d:{1:0.3,2:0.3,3:0.3,4:0.3,5:0.6,6:0.6,7:0.6,8:0.6,9:1.2,10:1.2,11:1.2,12:1.2,13:2.4,14:2.4,15:2.4,16:2.4,21:0.3,22:0.3,23:0.3,24:0.3,25:0.6,26:0.6,27:0.6,28:0.6,29:1.2,30:1.2,31:1.2,32:1.2,33:2.4,34:2.4,35:2.4,36:2.4,45:0.3,46:0.3,47:0.3,48:0.3,49:0.6,50:0.6,51:0.6,52:0.6,53:1.2,54:1.2,55:2.4,56:2.4},c:{f1:{mg:21.6,v:2,cost:1600000},f2:{mg:15.6,v:2,cost:1600000},f3:{mg:16.8,v:2,cost:1600000},tot:{mg:54,v:5,cost:4000000}}},
+  {name:'Retatrutide',cat:'off',d:{1:2,2:2,3:2,4:2,5:4,6:4,7:4,8:4,9:8,10:8,11:8,12:8,13:12,14:12,15:12,16:12,21:2,22:2,23:2,24:2,25:4,26:4,27:4,28:4,29:8,30:8,31:8,32:8,33:12,34:12,35:12,36:12,45:2,46:2,47:2,48:2,49:4,50:4,51:4,52:4,53:8,54:8,55:8,56:8},c:{f1:{mg:128,v:6,cost:7200000},f2:{mg:88,v:4,cost:4800000},f3:{mg:96,v:5,cost:6000000},tot:{mg:312,v:16,cost:19200000}}},
+  {name:'Tesamorelin',cat:'off',d:{1:5,2:5,3:10,4:10,5:10,6:10,7:10,8:10,9:10,10:10,11:10,12:10,17:5,18:5,19:10,20:10,21:10,22:10,23:10,24:10,25:10,26:10,27:10,28:10,33:5,34:5,35:10,36:10,37:10,38:10,39:10,40:10,41:10,42:10,43:10,44:10,49:5,50:5,51:10,52:10,53:10,54:10,55:10,56:10},c:{f1:{mg:220,v:6,cost:9000000},f2:{mg:110,v:3,cost:4500000},f3:{mg:70,v:2,cost:3000000},tot:{mg:400,v:10,cost:15000000}}},
+  {name:'MOTS-c',cat:'met',d:{5:15,6:15,7:20,8:20,13:15,14:15,15:20,16:20,21:15,22:15,23:20,24:20,29:15,30:15,31:20,32:20,37:15,38:15,39:20,40:20,45:15,46:15,47:20,48:20,53:15,54:15,55:20,56:20},c:{f1:{mg:210,v:5,cost:7000000},f2:{mg:140,v:4,cost:5600000},f3:{mg:140,v:4,cost:5600000},tot:{mg:490,v:12,cost:16800000}}},
+  {name:'NAD+',cat:'met',d:{5:100,6:100,7:250,8:500,13:100,14:100,15:250,16:500,21:100,22:100,23:250,24:500,29:100,30:100,31:250,32:500,37:100,38:100,39:250,40:500,45:100,46:100,47:250,48:500,53:100,54:100,55:250,56:500},c:{f1:{mg:2850,v:3,cost:2400000},f2:{mg:1900,v:2,cost:1600000},f3:{mg:1900,v:2,cost:1600000},tot:{mg:6650,v:7,cost:5600000}}},
+  {name:'SLU-PP-332',cat:'met',d:{1:140,2:140,3:280,4:280,5:280,6:280,7:420,8:420,9:420,10:420,11:140,12:140,21:140,22:140,23:280,24:280,25:280,26:280,27:420,28:420,29:420,30:420,31:140,32:140,41:140,42:140,43:280,44:280,45:280,46:280,47:420,48:420,49:420,50:420,51:140,52:140},c:{f1:{mg:5600,v:3,cost:12000000},f2:{mg:1960,v:1,cost:4000000},f3:{mg:2520,v:1,cost:4000000},tot:{mg:10080,v:5,cost:20000000}}},
+  {name:'ARA-290',cat:'def',d:{29:8,30:12,31:14,32:16,37:8,38:12,39:14,40:16,45:8,46:12,47:14,48:16,53:8,54:12,55:14,56:16},c:{f1:{mg:0,v:0,cost:0},f2:{mg:100,v:10,cost:8500000},f3:{mg:100,v:10,cost:8500000},tot:{mg:200,v:20,cost:17000000}}},
+  {name:'BPC-157',cat:'def',d:{1:1.75,2:1.75,3:3.5,4:3.5,5:3.5,6:3.5,7:3.5,8:3.5,9:3.5,10:3.5,11:1.75,12:1.75,17:1.75,18:1.75,19:3.5,20:3.5,21:3.5,22:3.5,23:3.5,24:3.5,25:3.5,26:3.5,27:1.75,28:1.75,33:1.75,34:1.75,35:3.5,36:3.5,37:3.5,38:3.5,39:3.5,40:3.5,41:3.5,42:3.5,43:1.75,44:1.75,49:1.75,50:1.75,51:3.5,52:3.5,53:3.5,54:3.5,55:3.5,56:3.5},c:{f1:{mg:70,v:7,cost:4550000},f2:{mg:35,v:4,cost:2600000},f3:{mg:24.5,v:2,cost:1300000},tot:{mg:129.5,v:13,cost:8450000}}},
+  {name:'CJC-1295+IPA',cat:'def',d:{29:0.5,30:0.5,31:1,32:1,33:1,34:1,35:1,36:1,37:1,38:1,39:0.5,40:0.5,49:0.5,50:0.5,51:1,52:1,53:1,54:1,55:1,56:0.5},c:{f1:{mg:0,v:0,cost:0},f2:{mg:10,v:1,cost:800000},f3:{mg:10,v:1,cost:800000},tot:{mg:20,v:2,cost:1600000}}},
+  {name:'IGF-1 LR3',cat:'def',d:{29:140,30:300,31:300,32:300,37:140,38:300,39:300,40:300,45:140,46:300,47:300,48:300,53:140,54:300,55:300,56:300},c:{f1:{mg:0,v:0,cost:0},f2:{mg:2080,v:2,cost:2700000},f3:{mg:2080,v:2,cost:2700000},tot:{mg:4160,v:4,cost:5400000}}},
+  {name:'TB-500',cat:'def',d:{29:5,30:5,31:5,32:5,37:5,38:5,39:5,40:5,45:5,46:5,47:5,48:5,53:5,54:5,55:5,56:5},c:{f1:{mg:0,v:0,cost:0},f2:{mg:40,v:4,cost:3000000},f3:{mg:40,v:4,cost:3000000},tot:{mg:80,v:8,cost:6000000}}},
+  {name:'HCG',cat:'hor',d:{45:500,46:500,47:500,48:500,49:750,50:750,51:750,52:750,53:1000,54:1000,55:1000,56:1000},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:0,v:0,cost:0},tot:{mg:17250,v:0,cost:0}}},
+  {name:'HGH',cat:'hor',d:{45:14,46:14,47:14,48:14,49:21,50:21,51:21,52:21,53:28,54:28,55:28,56:28},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:252,v:7,cost:4900000},tot:{mg:252,v:7,cost:4900000}}},
+  {name:'HMG',cat:'hor',d:{45:75,46:75,47:75,48:75,49:150,50:150,51:150,52:150,53:150,54:150,55:150,56:150},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:1500,v:20,cost:13000000},tot:{mg:1500,v:20,cost:13000000}}},
+  {name:'Kisspeptin-10',cat:'hor',d:{33:1,34:1,35:1,36:1,37:1,38:1,39:1.5,40:1.5,41:2.25,42:2.25,43:2.25,44:2.25,45:2.25,46:2.25,47:2.25,48:2.25,49:2.5,50:2.5,51:3,52:3,53:3,54:3,55:3,56:3},c:{f1:{mg:0,v:0,cost:0},f2:{mg:18,v:2,cost:1800000},f3:{mg:32,v:3,cost:2700000},tot:{mg:50,v:5,cost:4500000}}},
+  {name:'PT-141',cat:'hor',d:{33:2,34:2,35:2,36:2,37:2,38:2,39:3,40:3,41:4.5,42:4.5,43:4.5,44:4.5,45:4.5,46:4.5,47:4.5,48:4.5,49:4.5,50:4.5,51:4.5,52:4.5,53:4.5,54:4.5,55:4.5,56:4.5},c:{f1:{mg:0,v:0,cost:0},f2:{mg:36,v:4,cost:2400000},f3:{mg:54,v:5,cost:3000000},tot:{mg:90,v:9,cost:5400000}}},
+  {name:'DSIP',cat:'cns',d:{9:2.5,10:2.5,11:2.5,12:2.5,21:2.5,22:2.5,23:2.5,24:2.5,33:2.5,34:2.5,35:2.5,36:2.5,53:2.5,54:2.5,55:2.5,56:2.5},c:{f1:{mg:20,v:2,cost:1200000},f2:{mg:10,v:1,cost:600000},f3:{mg:10,v:1,cost:600000},tot:{mg:40,v:4,cost:2400000}}},
+  {name:'Epitalon',cat:'cns',d:{1:10,2:10,3:10,4:20,45:10,46:10,47:10,48:20},c:{f1:{mg:50,v:1,cost:1000000},f2:{mg:0,v:0,cost:0},f3:{mg:50,v:1,cost:1000000},tot:{mg:100,v:2,cost:2000000}}},
+  {name:'Selank',cat:'cns',d:{45:1,46:1,47:1,48:1,49:2,50:2,51:2,52:2,53:3,54:3,55:3,56:3},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:24,v:2,cost:1000000},tot:{mg:24,v:2,cost:1000000}}},
+  {name:'Semax',cat:'cns',d:{45:1,46:1,47:1,48:1,49:2,50:2,51:2,52:2,53:3,54:3,55:3,56:3},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:24,v:2,cost:1000000},tot:{mg:24,v:2,cost:1000000}}},
+  {name:'GHK-Cu',cat:'inf',d:{45:5,46:5,47:5,48:5,49:10,50:10,51:10,52:10,53:10,54:10,55:10,56:10},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:100,v:2,cost:700000},tot:{mg:100,v:2,cost:700000}}},
+  {name:'KPV',cat:'inf',d:{1:2.5,2:2.5,3:2.5,4:2.5,5:2.5,6:2.5,7:2.5,8:2.5,13:2.5,14:2.5,15:2.5,16:2.5,17:2.5,18:2.5,19:2.5,20:2.5,25:2.5,26:2.5,27:2.5,28:2.5},c:{f1:{mg:50,v:5,cost:3000000},f2:{mg:0,v:0,cost:0},f3:{mg:0,v:0,cost:0},tot:{mg:50,v:5,cost:3000000}}},
+  {name:'SS-31',cat:'inf',d:{1:30,2:30,3:30,4:30,9:30,10:30,11:30,12:30,17:30,18:30,19:30,20:30,25:30,26:30,27:30,28:30,33:30,34:30,35:30,36:30,41:30,42:30,43:30,44:30,49:30,50:30,51:30,52:30},c:{f1:{mg:480,v:10,cost:15000000},f2:{mg:240,v:5,cost:7500000},f3:{mg:120,v:2,cost:3000000},tot:{mg:840,v:17,cost:25500000}}},
+  {name:'Thymosan a-1',cat:'inf',d:{46:2,47:2,48:2,49:3,50:3,51:3,52:3,53:3,54:3,55:3,56:3},c:{f1:{mg:0,v:0,cost:0},f2:{mg:0,v:0,cost:0},f3:{mg:30,v:3,cost:3300000},tot:{mg:30,v:3,cost:3300000}}},
+];
+
+const REDUNDANCY=[
+  {id:'gh3',lvl:'HIGH',title:'GH Axis Triple Stack',body:'Tesamorelin + CJC-1295+IPA + HGH bersamaan → saturasi IGF-1 suprafisiologis. Risk: organ concern.',rec:'Max 2 dari 3 per fase. F1–2: Tesam+CJC. F3: HGH replace Tesam.',cmps:['Tesamorelin','CJC-1295+IPA','HGH'],thresh:3},
+  {id:'bpctb',lvl:'HIGH',title:'BPC-157 + TB-500 Double Dose',body:'BPC+TB standalone sudah = Wolverine blend. Jangan tambah vial Wolverine terpisah.',rec:'Gunakan BPC + TB standalone seperti di protokol. Tidak perlu beli Wolverine blend.',cmps:['BPC-157','TB-500'],thresh:2},
+  {id:'rc',lvl:'HIGH',title:'Retatrutide + Cagrilintide Full Stack',body:'Combined appetite suppression → inadequate protein → muscle catabolism (kritis Fase 2+).',rec:'Reta full dose → pause Cagrilintide. Reta taper → Cagrilintide boleh lanjut.',cmps:['Retatrutide','Cagrilintide'],thresh:2},
+  {id:'ih',lvl:'MED',title:'IGF-1 LR3 + HGH — Dual IGF-1',body:'Dual IGF-1 elevation → uncontrolled mitogenic signaling, hypoglycemia risk.',rec:'Pilih salah satu per fase. Jika keduanya F3, pastikan weeks tidak overlap.',cmps:['IGF-1 LR3','HGH'],thresh:2},
+  {id:'hpg',lvl:'MED',title:'HCG + Kisspeptin + HMG — HPG Triple',body:'HPG axis over-stimulation. HMG hanya jika FSH drop confirmed via bloodwork.',rec:'Mulai HCG + Kisspeptin dulu. Tambah HMG hanya setelah bloodwork konfirmasi.',cmps:['HCG','Kisspeptin-10','HMG'],thresh:3},
+  {id:'ss',lvl:'LOW',title:'Selank + Semax — Jadwal Ketat',body:'Semax stimulant-adjacent vs Selank anxiolytic. Tidak kontraindikasi tapi jadwal salah → insomnia.',rec:'Semax pagi. Selank sore/malam (1–2h sebelum tidur).',cmps:['Selank','Semax'],thresh:2},
+];
+
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+let S={
+  ph:1, tab:0,
+  budCap:50000000, budPh:1,
+  budSel:new Set(),
+  vialPOV:'all',    // 'all' | 'f1' | 'f2' | 'f3' | 'cat:off' | 'eff'
+  vialSort:'cost',  // 'cost' | 'vials' | 'eff' | 'price'
+  filterCats:new Set(Object.keys(CAT)),
+  search:'',
+};
+
+function initBudSel(ph){
+  S.budSel=new Set();
+  COMPOUNDS.forEach(c=>{if((c.c[`f${ph}`]?.cost||0)>0)S.budSel.add(c.name);});
+}
+initBudSel(1);
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+const rp=n=>'Rp '+Math.round(n).toLocaleString('id-ID');
+const rpM=n=>n>=1e6?'Rp '+(n/1e6).toFixed(n%1e6===0?0:1)+' jt':rp(n);
+const pCost=ph=>COMPOUNDS.reduce((a,c)=>a+(c.c[`f${ph}`]?.cost||0),0);
+const totCost=c=>c.c.tot.cost;
+const totVials=c=>c.c.tot.v||0;
+
+function scCol(s){return s>=60?'#15803D':s>=35?'#92400E':s>=15?'#B91C1C':'var(--t3)'}
+function scSpill(s){return s>=60?'sp-h':s>=35?'sp-m':s>=15?'sp-l':'sp-o'}
+function stLabel(s){
+  if(s>=60)return{cls:'st-wajib',l:'WAJIB'};
+  if(s>=35)return{cls:'st-opsional',l:'OPSIONAL'};
+  if(s>=15)return{cls:'st-rendah',l:'RENDAH'};
+  return{cls:'st-off',l:'OFF'};
+}
+function phOfW(w){return w<=28?1:w<=44?2:3}
+function getPrio(name,ph){return SC[name]?.[`f${ph}`]?.p||0}
+function budEff(name,ph){
+  const p=getPrio(name,ph),c=COMPOUNDS.find(x=>x.name===name)?.c[`f${ph}`]?.cost||0;
+  return(!c||!p)?0:Math.round(p/(c/1e6));
+}
+function sportScore(name){
+  const s=SP[name];if(!s)return 0;
+  return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
+}
+function getConflicts(){
+  return REDUNDANCY.map(r=>({...r,active:r.cmps.filter(c=>S.budSel.has(c)),triggered:r.cmps.filter(c=>S.budSel.has(c)).length>=r.thresh}));
+}
+
+// ══════════════════════════════════════════════════════════
+// METRIC CARDS (7 cards, clickable)
+// ══════════════════════════════════════════════════════════
+const METRIC_DEFS=[
+  {id:'grand',cls:'mc-grand',label:'Grand Total',tab:0,suffix:'',sub:'56 minggu · 26 cpd'},
+  {id:'f1',cls:'mc-f1',label:'Fase 1 W1–28',tab:0,ph:1,sub:'Offensive dominant'},
+  {id:'f2',cls:'mc-f2',label:'Fase 2 W29–44',tab:0,ph:2,sub:'Transisi kritis'},
+  {id:'f3',cls:'mc-f3',label:'Fase 3 W45–56',tab:0,ph:3,sub:'Precision defense'},
+  {id:'vials',cls:'',label:'Total Vials',tab:2,sub:'Klik → detail vial'},
+  {id:'wajib',cls:'',label:'Wajib F1',tab:1,sub:'Priority ≥60'},
+  {id:'cpds',cls:'',label:'Compounds',tab:4,sub:'Klik → sport profile'},
+];
+
+function renderMetricStrip(){
+  const grand=COMPOUNDS.reduce((a,c)=>a+totCost(c),0);
+  const totalV=COMPOUNDS.reduce((a,c)=>a+totVials(c),0);
+  const wajib1=COMPOUNDS.filter(c=>getPrio(c.name,1)>=60).length;
+  const vals={grand:rpM(grand),f1:rpM(pCost(1)),f2:rpM(pCost(2)),f3:rpM(pCost(3)),vials:totalV,wajib:wajib1,cpds:COMPOUNDS.length};
+
+  document.getElementById('metric-strip').innerHTML=METRIC_DEFS.map((m,i)=>{
+    const v=vals[m.id];
+    const isAct=(m.ph&&S.ph===m.ph)||(m.tab===S.tab&&!m.ph);
+    const _pbg=m.ph===1?'rgba(255,107,53,.15)':m.ph===2?'rgba(245,158,11,.15)':'rgba(16,185,129,.15)';
+    const _pc=m.ph===1?'var(--f1)':m.ph===2?'var(--f2)':'var(--f3)';
+    const _pt=m.ph===1?'↑ aggressive':m.ph===2?'↔ balanced':'↓ precise';
+    const pill=m.ph?'<div class="mc-pill" style="background:'+_pbg+';color:'+_pc+'">'+_pt+'</div>':'';
+    return `<div class="mc ${m.cls}${isAct?' act':''}" onclick="onMcClick(${i})" title="Klik untuk detail">
+      <div class="mc-l">${m.label}</div>
+      <div class="mc-v${typeof v==='string'&&v.length>8?' sm':''}">${v}</div>
+      <div class="mc-s">${m.sub}</div>
+      ${pill}
+      <span class="mc-arrow">→</span>
+    </div>`;
+  }).join('');
+}
+
+function onMcClick(i){
+  const m=METRIC_DEFS[i];
+  if(m.ph){S.ph=m.ph;renderPhaseRow();}
+  S.tab=m.tab;
+  if(m.id==='vials')S.tab=2;
+  renderNav();renderPanels();renderMetricStrip();
+}
+
+// ══════════════════════════════════════════════════════════
+// PHASE ROW
+// ══════════════════════════════════════════════════════════
+function renderPhaseRow(){
+  const max=Math.max(...PHASES.map(p=>pCost(p.id)));
+  document.getElementById('phase-row').innerHTML=PHASES.map(p=>{
+    const c=pCost(p.id),pct=Math.round(c/max*100),sel=S.ph===p.id;
+    const acv=COMPOUNDS.filter(cx=>(cx.c[`f${p.id}`]?.cost||0)>0).length;
+    const tv=COMPOUNDS.reduce((a,cx)=>a+(cx.c[`f${p.id}`]?.v||0),0);
+    return `<div class="ph-card${sel?' '+p.selCls:''}" onclick="setPhase(${p.id})">
+      <div class="ph-tag" style="color:${p.col}">
+        <div class="ph-dot" style="background:${p.col}"></div>
+        ${p.cls.toUpperCase()} · ${p.bf}
+      </div>
+      <div class="ph-name">${p.name} — ${p.label}</div>
+      <div class="ph-desc">${p.desc}</div>
+      <div class="ph-grid">
+        <div class="ph-stat"><div class="ph-stat-l">Minggu</div><div class="ph-stat-v">${p.wk}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Biaya</div><div class="ph-stat-v" style="color:${p.col}">${rpM(c)}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Active Cpd</div><div class="ph-stat-v">${acv}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Defisit</div><div class="ph-stat-v">${p.defisit}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v">${tv}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">W Range</div><div class="ph-stat-v">W${p.wS}–${p.wE}</div></div>
+      </div>
+      <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:${p.col}"></div></div>
+    </div>`;
+  }).join('');
+}
+function setPhase(n){S.ph=n;renderPhaseRow();renderPanels();renderMetricStrip();}
+
+// ══════════════════════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════════════════════
+const TABS=[
+  {ico:'📊',l:'Overview'},
+  {ico:'🎯',l:'Decision Matrix'},
+  {ico:'📦',l:'Vial Planner'},
+  {ico:'🗓',l:'Timeline'},
+  {ico:'💰',l:'Budget + Conflict'},
+  {ico:'🧬',l:'Compounds'},
+];
+function renderNav(){
+  document.getElementById('tab-nav').innerHTML=TABS.map((t,i)=>
+    `<button class="tab-btn${S.tab===i?' act':''}" onclick="setTab(${i})">${t.ico} ${t.l}</button>`
+  ).join('');
+}
+function setTab(n){S.tab=n;renderNav();renderPanels();renderMetricStrip();}
+
+// ══════════════════════════════════════════════════════════
+// PANELS
+// ══════════════════════════════════════════════════════════
+function renderPanels(){
+  const fns=[pOverview,pDecision,pVial,pTimeline,pBudget,pCompounds];
+  document.getElementById('panels-root').innerHTML=`<div class="panel act">${fns[S.tab]()}</div>`;
+}
+
+// ──────────────────────────────────────────
+// P0 — OVERVIEW
+// ──────────────────────────────────────────
+function pOverview(){
+  const ph=S.ph,phKey=`f${ph}`;
+  const lwViz=`<div class="lw-grid">${PHASES.map(p=>`
+    <div class="lw-card">
+      <div class="lw-ph" style="color:${p.col}">${p.name} — ${p.bf}</div>
+      ${Object.entries(LW).map(([k,v])=>`
+      <div class="lw-row">
+        <div class="lw-n">${v.n}</div>
+        <div class="lw-bar"><div class="lw-fill" style="width:${v[`f${p.id}`]*2.5}%;background:${v.col}"></div></div>
+        <div class="lw-pct">${v[`f${p.id}`]}%</div>
+      </div>`).join('')}
+    </div>`).join('')}</div>`;
+
+  const cc={};Object.keys(CAT).forEach(k=>cc[k]=0);
+  COMPOUNDS.forEach(c=>cc[c.cat]+=(c.c[phKey]?.cost||0));
+  const mxcc=Math.max(...Object.values(cc),1);
+  const catBars=Object.entries(cc).map(([k,v])=>`
+    <div class="srow">
+      <div class="srow-lbl"><span class="lb ${CAT[k].cls}">${CAT[k].n}</span></div>
+      <div class="srow-bar"><div class="srow-fill" style="width:${v/mxcc*100}%;background:${CAT[k].col}"><span class="srow-txt">${rpM(v)}</span></div></div>
+      <div class="srow-val">${rpM(v)}</div>
+    </div>`).join('');
+
+  const topPrio=[...COMPOUNDS].map(c=>({...c,prio:getPrio(c.name,ph)})).sort((a,b)=>b.prio-a.prio).slice(0,8);
+  const topSport=[...COMPOUNDS].sort((a,b)=>sportScore(b.name)-sportScore(a.name)).slice(0,5);
+
+  const f1c=pCost(1),f2c=pCost(2),f3c=pCost(3),tot=f1c+f2c+f3c;
+  const costBar=`<div style="height:14px;border-radius:7px;overflow:hidden;display:flex;margin-bottom:6px;box-shadow:inset 0 1px 3px rgba(0,0,0,.08)">
+    <div style="flex:${f1c/tot};background:var(--f1)" title="F1: ${rpM(f1c)}"></div>
+    <div style="flex:${f2c/tot};background:var(--f2)" title="F2: ${rpM(f2c)}"></div>
+    <div style="flex:${f3c/tot};background:var(--f3)" title="F3: ${rpM(f3c)}"></div>
+  </div>
+  <div style="display:flex;gap:14px">${PHASES.map(p=>`<div style="font-size:10.5px;font-weight:700;color:${p.col}">● ${p.name}: ${rpM(pCost(p.id))}</div>`).join('')}</div>`;
+
+  return `
+  <div class="grid2" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-title"><span class="ico">⚖️</span> Layer Bobot per Fase</div>
+      ${lwViz}
+      <div class="note">Offensive 40%→25%→10% · Defensive 8%→20%→25% · Hormonal 7%→15%→22%. Semakin lean = semakin protective.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ico">💸</span> Distribusi Biaya</div>
+      ${costBar}
+      <div class="sep"></div>
+      <div class="card-title"><span class="ico">📊</span> Biaya per Kategori — Fase ${ph}</div>
+      ${catBars}
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ico">🏆</span> Top Priority Score — Fase ${ph}</div>
+      ${topPrio.map((c,i)=>{const st=stLabel(c.prio);return`<div class="srow">
+        <div style="font-size:10px;color:var(--t3);width:16px;flex-shrink:0">${i+1}</div>
+        <div class="srow-lbl">${c.name}</div>
+        <div class="srow-bar"><div class="srow-fill" style="width:${c.prio}%;background:${scCol(c.prio)}"><span class="srow-txt">${c.prio}</span></div></div>
+        <span class="status-pill ${st.cls}">${st.l}</span>
+      </div>`;}).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ico">⭐</span> Top Sport Profile Score</div>
+      ${topSport.map(c=>{const s=sportScore(c.name);return`<div class="srow">
+        <div class="srow-lbl"><span class="lb ${CAT[c.cat].cls}">${c.name}</span></div>
+        <div class="srow-bar"><div class="srow-fill" style="width:${s}%;background:var(--acc)"><span class="srow-txt">★${s}</span></div></div>
+        <div class="srow-val">★${s}</div>
+      </div>`;}).join('')}
+    </div>
+  </div>`;
+}
+
+// ──────────────────────────────────────────
+// P1 — DECISION MATRIX
+// ──────────────────────────────────────────
+function pDecision(){
+  const ph=S.ph,phKey=`f${ph}`;
+  const sorted=[...COMPOUNDS].sort((a,b)=>getPrio(b.name,ph)-getPrio(a.name,ph));
+  const rows=sorted.map(c=>{
+    const s=SC[c.name]||{},f1=s.f1||{r:0,p:0},f2=s.f2||{r:0,p:0},f3=s.f3||{r:0,p:0};
+    const cur=ph===1?f1:ph===2?f2:f3,st=stLabel(cur.p);
+    const cost=c.c[phKey]?.cost||0,eff=budEff(c.name,ph),ss=sportScore(c.name);
+    return`<tr>
+      <td><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
+      <td><strong>${c.name}</strong></td>
+      <td class="c"><span class="spill ${scSpill(f1.p)}">${f1.p}</span></td>
+      <td class="c"><span class="spill ${scSpill(f2.p)}">${f2.p}</span></td>
+      <td class="c"><span class="spill ${scSpill(f3.p)}">${f3.p}</span></td>
+      <td class="c"><span class="status-pill ${st.cls}">${st.l}</span></td>
+      <td class="r"><span class="${cost>0?'cost-v':'zero'}">${cost>0?rpM(cost):'—'}</span></td>
+      <td class="c" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${ss>=60?'var(--acc)':ss>=40?'var(--f2)':'var(--t3)'}">★${ss}</td>
+      <td class="c" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${eff>=10?'var(--f3)':eff>=5?'var(--f2)':'var(--t3)'}${eff===0?';opacity:.4':''}">${eff>0?eff+'x':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  return`
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title"><span class="ico">⚖️</span> Layer Bobot Aktif — Fase ${ph}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${Object.entries(LW).map(([k,v])=>`
+      <div style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:8px 14px;text-align:center">
+        <div style="font-size:9px;font-weight:800;color:${v.col};text-transform:uppercase;margin-bottom:2px">${v.n}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:${v.col}">${v[`f${ph}`]}%</div>
+      </div>`).join('')}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="ico">🎯</span> Master Decision Matrix — Fase ${ph}</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Layer</th><th>Compound</th>
+          <th class="c">Prio F1</th><th class="c">Prio F2</th><th class="c">Prio F3</th>
+          <th class="c">Status F${ph}</th><th class="r">Biaya F${ph}</th>
+          <th class="c">Sport</th><th class="c">Efisiensi</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="tbl-foot">
+          <td colspan="6"><strong>TOTAL FASE ${ph}</strong></td>
+          <td class="r cost-v">${rpM(pCost(ph))}</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="note">Prio ≥60 = <span style="color:#15803D;font-weight:700">WAJIB</span> · 35–59 = OPSIONAL · 15–34 = RENDAH · &lt;15 = OFF<br>Sport ★ = profile score untuk Hybrid Power Athlete (Zone2+Power+Recovery+Hormonal+CNS). Efisiensi = Priority ÷ biaya (juta Rp).</div>
+  </div>`;
+}
+
+// ──────────────────────────────────────────
+// P2 — VIAL PLANNER (NEW!)
+// ──────────────────────────────────────────
+function pVial(){
+  const ph=S.ph,phKey=`f${ph}`;
+  const totalV=COMPOUNDS.reduce((a,c)=>a+(c.c.tot.v||0),0);
+  const phV=COMPOUNDS.reduce((a,c)=>a+(c.c[phKey]?.v||0),0);
+  const phCost=pCost(ph);
+  const totalCostAll=COMPOUNDS.reduce((a,c)=>a+totCost(c),0);
+
+  // Vials in batches of 10 cost
+  const batch10Cost=COMPOUNDS.filter(c=>(c.c[phKey]?.v||0)>0).map(c=>{
+    const vs=VSPECS[c.name];
+    const v=c.c[phKey]?.v||0;
+    const batches=Math.ceil(v/10);
+    return {name:c.name,v,batches,batchCost:batches*10*(vs?.vPrice||0)};
+  });
+
+  // POV filter
+  let filtered=[...COMPOUNDS];
+  if(S.vialPOV==='f1')filtered=filtered.filter(c=>c.c.f1.v>0);
+  else if(S.vialPOV==='f2')filtered=filtered.filter(c=>c.c.f2.v>0);
+  else if(S.vialPOV==='f3')filtered=filtered.filter(c=>c.c.f3.v>0);
+  else if(S.vialPOV==='active')filtered=filtered.filter(c=>c.c[phKey]?.v>0);
+  else if(S.vialPOV.startsWith('cat:'))filtered=filtered.filter(c=>c.cat===S.vialPOV.split(':')[1]);
+  else if(S.vialPOV==='eff'){
+    filtered=filtered.filter(c=>(c.c[phKey]?.cost||0)>0).sort((a,b)=>budEff(b.name,ph)-budEff(a.name,ph));
+  }
+
+  // Sort
+  if(S.vialSort==='vials')filtered.sort((a,b)=>totVials(b)-totVials(a));
+  else if(S.vialSort==='cost')filtered.sort((a,b)=>totCost(b)-totCost(a));
+  else if(S.vialSort==='price')filtered.sort((a,b)=>(VSPECS[b.name]?.vPrice||0)-(VSPECS[a.name]?.vPrice||0));
+  else if(S.vialSort==='eff')filtered.sort((a,b)=>budEff(b.name,ph)-budEff(a.name,ph));
+
+  const maxTotV=Math.max(...COMPOUNDS.map(c=>totVials(c)),1);
+  const maxTotC=Math.max(...COMPOUNDS.map(c=>totCost(c)),1);
+
+  // Category vial totals
+  const catV={};Object.keys(CAT).forEach(k=>catV[k]=0);
+  COMPOUNDS.forEach(c=>catV[c.cat]+=(c.c.tot.v||0));
+
+  const cards=filtered.map(c=>{
+    const vs=VSPECS[c.name]||{vPrice:0,label:'—',vSize:0,unit:''};
+    const tv=totVials(c);
+    const v1=c.c.f1.v||0,v2=c.c.f2.v||0,v3=c.c.f3.v||0;
+    const tc=totCost(c);
+    const eff=budEff(c.name,ph);
+    const prio=getPrio(c.name,ph);
+    const batches=Math.ceil(tv/10);
+    const effCls=eff>=10?'eff-hi':eff>=5?'eff-mid':'eff-lo';
+    const vBarPct=Math.round(tv/maxTotV*100);
+    const phColMap={1:'var(--f1)',2:'var(--f2)',3:'var(--f3)'};
+
+    return`<div class="vcard">
+      <div class="vcard-hdr">
+        <div>
+          <span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span>
+          <div class="vcard-name">${c.name}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="vcard-price">per vial<br><strong>${rp(vs.vPrice)}</strong></div>
+        </div>
+      </div>
+      <div class="vcard-body">
+        <div class="vcard-spec">
+          <span class="spec-tag">📦 ${vs.label}</span>
+          <span class="spec-tag">10 vial = ${rp(vs.vPrice*10)}</span>
+          <span class="spec-tag">★${sportScore(c.name)}</span>
+        </div>
+        <div class="vcard-phase-row">
+          ${[1,2,3].map(p=>{
+            const v=c.c[`f${p}`]?.v||0;
+            const cost=c.c[`f${p}`]?.cost||0;
+            return`<div class="vph ${v>0?'has':'none'}">
+              <div class="vph-name" style="color:${phColMap[p]}">F${p}</div>
+              <div class="vph-v" style="color:${v>0?'var(--t0)':'var(--t3)'}">${v>0?v+'v':'—'}</div>
+              <div class="vph-sub">${cost>0?rpM(cost):'off'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="vcard-totbar">
+          <div class="vcard-totbar-lbl">
+            <span>Total ${tv} vial · ${batches} batch @10</span>
+            <strong>${rpM(tc)}</strong>
+          </div>
+          <div class="vbar"><div class="vbar-fill" style="width:${vBarPct}%;background:${CAT[c.cat].col}"></div></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:5px;flex-wrap:wrap">
+            ${eff>0?`<span class="eff-badge ${effCls}">⚡${eff}x efisiensi</span>`:''}
+            <span class="status-pill ${stLabel(prio).cls}" style="font-size:9px">${stLabel(prio).l} F${ph}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const POV_BTNS=[
+    {id:'all',l:'Semua'},
+    {id:'active',l:`Aktif F${ph}`},
+    {id:'f1',l:'Ada di F1'},
+    {id:'f2',l:'Ada di F2'},
+    {id:'f3',l:'Ada di F3'},
+    {id:'eff',l:'Paling Efisien'},
+    ...Object.entries(CAT).map(([k,v])=>({id:'cat:'+k,l:v.n})),
+  ];
+
+  return`
+  <div class="vial-summary-strip">
+    <div class="vs-card"><div class="vs-l">Total Vials (56W)</div><div class="vs-v">${totalV}</div><div class="vs-s">semua compound</div></div>
+    <div class="vs-card"><div class="vs-l">Vials Fase ${ph}</div><div class="vs-v" style="color:${PHASES[ph-1].col}">${phV}</div><div class="vs-s">W${PHASES[ph-1].wS}–${PHASES[ph-1].wE}</div></div>
+    <div class="vs-card"><div class="vs-l">Batch @10 F${ph}</div><div class="vs-v">${COMPOUNDS.filter(c=>(c.c[phKey]?.v||0)>0).reduce((a,c)=>a+Math.ceil((c.c[phKey]?.v||0)/10),0)}</div><div class="vs-s">unit pembelian</div></div>
+    <div class="vs-card"><div class="vs-l">Biaya Vial F${ph}</div><div class="vs-v cost-v">${rpM(phCost)}</div><div class="vs-s">dari XLSX lo</div></div>
+  </div>
+
+  <div class="vial-filter-row">
+    <div class="vf-lbl">📦 Filter POV:</div>
+    ${POV_BTNS.slice(0,6).map(b=>`<button class="vf-btn${S.vialPOV===b.id?' act':''}" onclick="S.vialPOV='${b.id}';renderPanels()">${b.l}</button>`).join('')}
+    <div style="width:1px;height:20px;background:var(--bdr2);margin:0 2px"></div>
+    ${POV_BTNS.slice(6).map(b=>`<button class="vf-btn${S.vialPOV===b.id?' act':''}" onclick="S.vialPOV='${b.id}';renderPanels()">${b.l}</button>`).join('')}
+    <div style="margin-left:auto;display:flex;align-items:center;gap:5px">
+      <span class="vf-lbl">Sort:</span>
+      ${[['cost','By Cost'],['vials','By Vials'],['price','By Harga/Vial'],['eff','By Efisiensi']].map(([id,l])=>
+        `<button class="vf-btn${S.vialSort===id?' act':''}" onclick="S.vialSort='${id}';renderPanels()">${l}</button>`).join('')}
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title"><span class="ico">📊</span> Distribusi Vial per Kategori (Total)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${Object.entries(catV).map(([k,v])=>`
+      <div style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:8px 14px;text-align:center;min-width:80px">
+        <div style="font-size:9px;font-weight:800;color:${CAT[k].col};text-transform:uppercase;margin-bottom:3px">${CAT[k].n}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t0)">${v}</div>
+        <div style="font-size:9px;color:var(--t2)">vials</div>
+      </div>`).join('')}
+    </div>
+    <div class="note">Harga per vial dari data riset lo (Final.xlsx). Sistem beli optimal = per 10 vial. "Batch @10" = jumlah pembelian minimal yang disarankan per compound.</div>
+  </div>
+
+  <div class="vial-grid">${cards}</div>`;
+}
+
+// ──────────────────────────────────────────
+// P3 — TIMELINE
+// ──────────────────────────────────────────
+function pTimeline(){
+  const weeks=Array.from({length:56},(_,i)=>i+1);
+  const phSegs=[{ph:1,s:1,e:28,col:'rgba(255,107,53,.75)',l:'F1 >15%'},{ph:2,s:29,e:44,col:'rgba(245,158,11,.75)',l:'F2 15–10%'},{ph:3,s:45,e:56,col:'rgba(16,185,129,.75)',l:'F3 10–6%'}];
+
+  const phBand=`<div class="gantt-ph-row">${phSegs.map(p=>`<div class="gantt-ph-seg" style="flex:${p.e-p.s+1};background:${p.col};color:#fff">${p.l}</div>`).join('')}</div>`;
+  const wkRow=`<div class="gantt-wk-row">${weeks.map(w=>`<div class="gantt-wk">${w%4===0?'W'+w:''}</div>`).join('')}</div>`;
+
+  const rows=COMPOUNDS.map(c=>{
+    const cells=weeks.map(w=>{
+      const dose=c.d[w];
+      if(!dose)return`<div class="g-cell g-off"></div>`;
+      const ph2=phOfW(w),prio=getPrio(c.name,ph2),wajib=prio>=60;
+      return`<div class="g-cell g-${ph2}${wajib?' w':''}" title="${c.name} W${w}: ${dose}${VSPECS[c.name]?.unit||'mg'} · Prio F${ph2}: ${prio}"></div>`;
+    }).join('');
+    return`<div class="g-row">
+      <div class="g-lbl"><span class="lb ${CAT[c.cat].cls}" style="font-size:8px">${c.cat.toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:600">${c.name}</span></div>
+      <div class="g-cells">${cells}</div>
+    </div>`;
+  }).join('');
+
+  return`<div class="card">
+    <div class="card-title"><span class="ico">🗓</span> Timeline Gantt — W1–W56 · 26 Compounds</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      ${[['rgba(255,107,53,.35)','F1 aktif (dim)'],['rgba(245,158,11,.35)','F2 aktif (dim)'],['rgba(16,185,129,.35)','F3 aktif (dim)'],['var(--f1)','Priority ≥60 WAJIB'],['var(--bg3)','OFF']].map(([c,l])=>
+      `<div style="display:flex;align-items:center;gap:5px"><div style="width:14px;height:14px;border-radius:3px;background:${c};flex-shrink:0"></div><span style="font-size:10px;color:var(--t2)">${l}</span></div>`).join('')}
+    </div>
+    <div class="gantt-wrap"><div class="gantt-grid">${phBand}${wkRow}<div style="height:1px;background:var(--bdr);margin:3px 0"></div>${rows}</div></div>
+    <div class="note">Hover = dosis + priority score. Bright solid = Priority ≥60 (WAJIB di fase tersebut). Dosis exact dari XLSX, boundary W1–28/W29–44/W45–56.</div>
+  </div>`;
+}
+
+// ──────────────────────────────────────────
+// P4 — BUDGET + CONFLICT
+// ──────────────────────────────────────────
+function pBudget(){
+  const ph=S.budPh,phKey=`f${ph}`;
+  const cap=S.budCap;
+  const phCol={1:'var(--f1)',2:'var(--f2)',3:'var(--f3)'};
+
+  const sorted=[...COMPOUNDS]
+    .map(c=>({...c,prio:getPrio(c.name,ph),cost:c.c[phKey]?.cost||0,eff:budEff(c.name,ph),ss:sportScore(c.name)}))
+    .filter(c=>c.cost>0).sort((a,b)=>b.prio-a.prio);
+
+  const selCost=sorted.filter(c=>S.budSel.has(c.name)).reduce((a,c)=>a+c.cost,0);
+  const selPct=Math.min(100,Math.round(selCost/cap*100));
+  const over=selCost>cap;
+  let sugCost=0,suggested=[];
+  sorted.forEach(c=>{if(sugCost+c.cost<=cap){sugCost+=c.cost;suggested.push(c.name);}});
+
+  const conflicts=getConflicts(),actConf=conflicts.filter(r=>r.triggered);
+
+  const cBanner=actConf.length>0
+    ?`<div class="conflict-banner cb-warn"><div class="cb-ico">⚠️</div><div><div class="cb-title">${actConf.length} KONFLIK AKTIF dalam seleksi lo!</div><div class="cb-list">${actConf.map(r=>`• ${r.lvl} — ${r.title}`).join('<br>')}</div><div style="font-size:10px;color:var(--t2);margin-top:4px">Scroll ke Live Monitor →</div></div></div>`
+    :`<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">Seleksi ${S.budSel.size} compounds saat ini aman dari conflict rules.</div></div></div>`;
+
+  const cmpRows=sorted.map(c=>{
+    const sel=S.budSel.has(c.name),conf=actConf.some(r=>r.active.includes(c.name));
+    return`<div class="bopt-row${conf?' in-conflict':''}">
+      <div class="chk${sel?' on':''}" onclick="toggleBudSel('${c.name}')"></div>
+      <div class="bopt-info">
+        <div class="bopt-name" style="${conf?'color:var(--warn)':''}">${c.name}${conf?' ⚠':''}</div>
+        <div class="bopt-sub">
+          <span class="lb ${CAT[c.cat].cls}" style="font-size:8.5px">${CAT[c.cat].n}</span>
+          <span>Prio <strong>${c.prio}</strong></span>
+          <span>★${c.ss}</span>
+          <span>Eff <strong style="color:${c.eff>=10?'var(--f3)':c.eff>=5?'var(--f2)':'var(--t3)'}">${c.eff>0?c.eff+'x':'—'}</strong></span>
+        </div>
+      </div>
+      <div class="bopt-cost">${rpM(c.cost)}</div>
+    </div>`;
+  }).join('');
+
+  const redAlerts=conflicts.map(r=>{
+    const cls=r.triggered?`la-${r.lvl.toLowerCase()}`:'la-ok';
+    return`<div class="live-alert ${cls}">
+      <div class="la-title">${r.triggered?'⚠':'✓'} ${r.lvl} — ${r.title}</div>
+      ${r.triggered?`<div class="la-body">${r.body}</div><div class="la-rec">→ ${r.rec}</div>`:''}
+      <div class="la-cmps">${r.cmps.map(c=>`<span class="la-cmp${r.active.includes(c)?' hit':''}">${c}</span>`).join('')}</div>
+    </div>`;
+  }).join('');
+
+  const effRanking=[...sorted].sort((a,b)=>b.eff-a.eff).slice(0,8);
+
+  return`
+  <div class="bud-controls">
+    <div class="bud-val-row"><div class="bud-val" id="budDisp">${rpM(cap)}</div><div class="bud-lbl">budget cap</div></div>
+    <input type="range" min="5000000" max="200000000" step="5000000" value="${cap}"
+      oninput="S.budCap=+this.value;document.getElementById('budDisp').textContent='Rp '+Math.round(+this.value).toLocaleString('id-ID');renderPanels()">
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px">
+      <span>Rp 5 jt</span><span>Rp 200 jt</span>
+    </div>
+    <div class="ph-toggle-row">
+      <span style="font-size:10px;color:var(--t2);font-weight:700">Fase:</span>
+      ${PHASES.map(p=>`<button class="ph-tgl${S.budPh===p.id?' t'+p.cls:''}" onclick="S.budPh=${p.id};initBudSel(${p.id});renderPanels()">${p.name}</button>`).join('')}
+      <button class="auto-btn" onclick="S.budSel=new Set(${JSON.stringify(suggested)});renderPanels()">✨ Auto Pilih Optimal</button>
+    </div>
+  </div>
+
+  <div class="bud-progress">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:${phCol[ph]}">${rpM(selCost)}</span> · ${S.budSel.size} compounds</span>
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Sisa: <span style="color:${over?'var(--warn)':'var(--f3)'}">${over?'OVER BUDGET':rpM(cap-selCost)}</span></span>
+    </div>
+    <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':phCol[ph]}"></div></div>
+    <div style="font-size:10px;color:var(--t2);margin-top:3px">${selPct}% dari cap · Fase ${ph}</div>
+  </div>
+
+  ${cBanner}
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ico">💰</span> Pilih Compound — Fase ${ph}</div>
+      ${cmpRows}
+      <div class="note">Centang untuk include. Conflict langsung terdeteksi real-time. Auto Pilih = greedy by Priority Score sampai budget habis.</div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">
+          <span class="live-dot" style="background:${actConf.length>0?'var(--warn)':'var(--f3)'}"></span>
+          Live Conflict Monitor — ${actConf.length}/${REDUNDANCY.length} aktif
+        </div>
+        ${redAlerts}
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="ico">⚡</span> Top Budget Efficiency — Fase ${ph}</div>
+        ${effRanking.map(c=>{const sel=S.budSel.has(c.name);return`<div class="srow" style="${sel?'':'opacity:.4'}">
+          <div class="srow-lbl">${c.name}</div>
+          <div class="srow-bar"><div class="srow-fill" style="width:${Math.min(100,c.eff*5)}%;background:${c.eff>=10?'var(--f3)':c.eff>=5?'var(--f2)':'var(--f1)'}"><span class="srow-txt">${c.eff}x</span></div></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--acc)">${rpM(c.cost)}</div>
+        </div>`;}).join('')}
+        <div class="note">Efisiensi = Priority Score ÷ Biaya (juta Rp). Dim = belum dipilih.</div>
+      </div>
+    </div>
+  </div>`;
+}
+function toggleBudSel(n){S.budSel.has(n)?S.budSel.delete(n):S.budSel.add(n);renderPanels();}
+
+// ──────────────────────────────────────────
+// P5 — COMPOUNDS
+// ──────────────────────────────────────────
+function pCompounds(){
+  const ph=S.ph;
+  const allDims={z2:0,pw:0,rc:0,hr:0,cn:0};
+  COMPOUNDS.forEach(c=>{const s=SP[c.name];if(s)Object.keys(allDims).forEach(k=>allDims[k]+=s[k])});
+  const maxD=Math.max(...Object.values(allDims));
+
+  const sportSummary=`<div class="card" style="margin-bottom:12px">
+    <div class="card-title"><span class="ico">🏋️</span> Sport Profile Architecture — Hybrid Power-Based Athlete</div>
+    <div class="sport-grid">
+      ${[['z2','🚴','Zone 2','Endurance synergy'],['pw','⚡','Power','Output support'],['rc','🔄','Recovery','Rate accel'],['hr','🧬','Hormonal','Axis protection'],['cn','🧠','CNS','Clarity deficit']].map(([k,ico,n,sub])=>{
+        const v=allDims[k],pct=Math.round(v/maxD*100);
+        const top=[...COMPOUNDS].sort((a,b)=>(SP[b.name]?.[k]||0)-(SP[a.name]?.[k]||0)).slice(0,3).map(c=>c.name);
+        return`<div class="sp-card">
+          <div class="sp-ico">${ico}</div>
+          <div class="sp-name">${n}</div>
+          <div class="sp-sub">${sub}</div>
+          <div class="sp-val">${v}</div>
+          <div class="sp-bar"><div class="sp-bar-fill" style="width:${pct}%"></div></div>
+          <div class="sp-top">${top.join(' · ')}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="note">Score = sum semua compound di protokol. Critical path lo: Zone 2 + Power = SS-31, MOTS-c, SLU-PP-332, CJC-1295+IPA, IGF-1 LR3.</div>
+  </div>`;
+
+  const filtered=[...COMPOUNDS]
+    .filter(c=>S.filterCats.has(c.cat)&&(!S.search||c.name.toLowerCase().includes(S.search.toLowerCase())))
+    .sort((a,b)=>sportScore(b.name)-sportScore(a.name));
+
+  const filterBar=`<div class="filter-bar">
+    <span class="fl">Layer:</span>
+    ${Object.entries(CAT).map(([k,v])=>`
+    <div class="fp${S.filterCats.has(k)?' act':''}" onclick="toggleCat('${k}')">
+      <div class="dot" style="background:${v.col}"></div>${v.n}
+    </div>`).join('')}
+    <input class="srch" placeholder="Cari compound..." value="${S.search}" oninput="S.search=this.value;renderPanels()">
+  </div>`;
+
+  const cards=filtered.map(c=>{
+    const sc=SC[c.name]||{},sp=SP[c.name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
+    const f1=sc.f1||{r:0,p:0},f2=sc.f2||{r:0,p:0},f3=sc.f3||{r:0,p:0};
+    const ss=sportScore(c.name),eff=budEff(c.name,ph),cost=c.c[`f${ph}`]?.cost||0;
+    const pips=(v)=>Array.from({length:5},(_,i)=>`<div class="pip ${i<v?'pip-on':'pip-off'}"></div>`).join('');
+    return`<div class="cmp-card">
+      <div class="cmp-hdr">
+        <div><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span><div class="cmp-name">${c.name}</div></div>
+        <div style="text-align:right">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--acc)">★${ss}</div>
+          <div style="font-size:9px;color:var(--t2)">sport</div>
+        </div>
+      </div>
+      <div class="cmp-body">
+        <div class="cmp-scores">
+          ${[1,2,3].map(p=>{const s=(p===1?f1:p===2?f2:f3);return`<div class="cmp-sc"><div class="cmp-sc-lbl">Prio F${p}</div><div class="cmp-sc-v" style="color:${scCol(s.p)}">${s.p}</div></div>`;}).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2);margin-bottom:.5rem">
+          <span>F${ph}: <strong style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${cost>0?rpM(cost):'—'}</strong></span>
+          <span>Eff: <strong style="color:${eff>=10?'var(--f3)':eff>=5?'var(--f2)':'var(--t3)'}">${eff>0?eff+'x':'—'}</strong></span>
+          <span>Harga/vial: <strong style="font-family:'JetBrains Mono',monospace">${rp(VSPECS[c.name]?.vPrice||0)}</strong></span>
+        </div>
+        ${[['z2','🚴 Zone 2'],['pw','⚡ Power'],['rc','🔄 Recovery'],['hr','🧬 Hormonal'],['cn','🧠 CNS']].map(([k,lbl])=>`
+        <div class="cmp-sport-row">
+          <div class="cmp-sl">${lbl}</div>
+          <div class="pips">${pips(sp[k])}</div>
+          <span style="font-size:9px;color:var(--t2);margin-left:5px">${sp[k]}/5</span>
+        </div>`).join('')}
+        <div class="cmp-mech">${MECHS[c.name]||''}</div>
+        ${sp.risk?`<div style="margin-top:.5rem"><span class="tag tag-warn">⚠ ${sp.risk}</span></div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return`${sportSummary}${filterBar}<div class="cmp-grid">${cards}</div>`;
+}
+
+function toggleCat(k){
+  if(S.filterCats.has(k)){if(S.filterCats.size>1)S.filterCats.delete(k);}
+  else S.filterCats.add(k);
+  renderPanels();
+}
+
+// ══════════════════════════════════════════
+// DOWNLOAD + INIT
+// ══════════════════════════════════════════
+function dlPage(){
+  const a=document.createElement('a');
+  a.download='peptide_master_v3.html';
+  a.href='data:text/html;charset=utf-8,'+encodeURIComponent(document.documentElement.outerHTML);
+  a.click();
+}
+
+renderMetricStrip();
+renderPhaseRow();
+renderNav();
+renderPanels();
+</script>
+</body>
+</html>
