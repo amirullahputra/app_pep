@@ -398,16 +398,28 @@ export function pVial(){
   const today=new Date();
   const vt=S.vialTab||'stok';
 
-  // ── SUMMARY COUNTS ──
-  const emptyCount=COMPOUNDS.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
-  const orderCount=COMPOUNDS.filter(c=>{const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};return inv.qty>0&&inv.qty<=inv.safetyStock;}).length;
-  const okCount=COMPOUNDS.length-emptyCount-orderCount;
-  const expiringSoonCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>{const d=Math.ceil((r.expiredAt-today)/(1000*60*60*24));return d>0&&d<=7;})).length;
-  const expiredCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt<=today)).length;
-  const hasReconCount=COMPOUNDS.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt>today)).length;
+  // ── FILTER BY DM.checked (compound yang sudah di-deal di Decision Matrix) ──
+  const dealtNames=DM.checked.size>0?DM.checked:null;
+  const dealtCpds=dealtNames
+    ?COMPOUNDS.filter(c=>dealtNames.has(c.name))
+    :COMPOUNDS;
+  const noDeal=dealtNames===null;
+
+  // ── SUMMARY COUNTS (hanya dari yang di-deal) ──
+  const emptyCount=dealtCpds.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
+  const orderCount=dealtCpds.filter(c=>{const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};return inv.qty>0&&inv.qty<=inv.safetyStock;}).length;
+  const okCount=dealtCpds.length-emptyCount-orderCount;
+  const expiringSoonCount=dealtCpds.filter(c=>(reconCache[c.name]||[]).some(r=>{const d=Math.ceil((r.expiredAt-today)/(1000*60*60*24));return d>0&&d<=7;})).length;
+  const expiredCount=dealtCpds.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt<=today)).length;
+  const hasReconCount=dealtCpds.filter(c=>(reconCache[c.name]||[]).some(r=>r.expiredAt>today)).length;
 
   // ── SUMMARY BAR ──
   const summaryBar=`
+  <div style="font-size:10px;color:var(--t3);margin-bottom:6px">
+    ${noDeal
+      ?'Menampilkan semua compound — centang di Decision Matrix untuk filter'
+      :`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang di-deal di Decision Matrix`}
+  </div>
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--f3)">
       <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--f3)">${okCount}</div>
@@ -437,18 +449,26 @@ export function pVial(){
   </div>`;
 
   // ── TAB SWITCHER ──
+  const noDealBanner=noDeal?`
+  <div class="note" style="margin-bottom:12px;border-left:3px solid var(--f2);background:var(--warn-bg)">
+    <span style="font-weight:800;color:var(--f2)">Belum ada compound yang di-deal.</span>
+    Pergi ke tab <b>Decision Matrix</b>, centang compound yang mau dipakai — list di sini otomatis mengikuti.
+  </div>`:'';
+
   const tabBar=`
-  <div style="display:flex;gap:6px;margin-bottom:12px">
+  ${noDealBanner}
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap">
     <button onclick="S.vialTab='stok';renderPanels()" style="padding:8px 20px;border-radius:8px;border:2px solid ${vt==='stok'?'var(--acc)':'var(--bdr)'};background:${vt==='stok'?'var(--acc)':'var(--bg2)'};color:${vt==='stok'?'#fff':'var(--t1)'};font-weight:800;font-size:12px;cursor:pointer">
       📦 Stok Lyophilized
     </button>
     <button onclick="S.vialTab='rekon';renderPanels()" style="padding:8px 20px;border-radius:8px;border:2px solid ${vt==='rekon'?'#7c3aed':'var(--bdr)'};background:${vt==='rekon'?'#7c3aed':'var(--bg2)'};color:${vt==='rekon'?'#fff':'var(--t1)'};font-weight:800;font-size:12px;cursor:pointer">
       🧪 Reconstituted Vials
     </button>
+    ${!noDeal?`<div style="font-size:10px;color:var(--t3);margin-left:4px">${dealtCpds.length} compound dari Decision Matrix</div>`:''}
   </div>`;
 
   // ── TAB 1: STOK LYOPHILIZED ──
-  const sortedStok=[...COMPOUNDS].sort((a,b)=>{
+  const sortedStok=[...dealtCpds].sort((a,b)=>{
     const rank={ORDER:0,KOSONG:1,AMAN:2};
     return(rank[invStatus(a.name).label]||2)-(rank[invStatus(b.name).label]||2);
   });
@@ -527,7 +547,7 @@ export function pVial(){
   </div>`;
 
   // ── TAB 2: RECONSTITUTED ──
-  const allReconRows=COMPOUNDS.map(c=>{
+  const allReconRows=dealtCpds.map(c=>{
     const sl=SHELF_LIFE[c.name];
     const shelfDays=sl?.shelf||null;
     const shelfLabel=shelfDays?`${shelfDays} hari`:(sl?'Oral/Kapsul':'—');
