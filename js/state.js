@@ -110,7 +110,14 @@ export function autoPickBudget(){
 // stages: Map<name, 'watchlist'|'tentatif'|'deal'>
 // watchlist = masuk pertimbangan, tentatif = sudah hampir fix, deal = confirmed
 export const DM={
-  stages:new Map(),
+  stages:new Map(
+    // default: compound dengan sport score >=60 langsung masuk Watchlist
+    COMPOUNDS.filter(c=>{
+      const s=SP[c.name];
+      if(!s)return false;
+      return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20)>=60;
+    }).map(c=>[c.name,'watchlist'])
+  ),
   dmTab:'pipeline',   // 'pipeline' | 'pertimbangan'
   filterLayer:'all',
   filterStatus:'all',

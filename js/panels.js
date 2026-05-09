@@ -36,9 +36,11 @@ export function pOverview(){
   const cwStart=weekToDate(cw);
   const cwEnd=new Date(cwStart);cwEnd.setDate(cwEnd.getDate()+6);
 
+  const dealt=dmDealt();
+  const dealtFilter=dealt.size>0?(c=>dealt.has(c.name)):(()=>true);
   const activeThisWeek=COMPOUNDS.filter(c=>{
     const dose=getDose(c.name,cw);
-    return dose!=null&&dose>0;
+    return dose!=null&&dose>0&&dealtFilter(c);
   }).map(c=>({...c,dose:getDose(c.name,cw),unit:VSPECS[c.name]?.unit||'mg',prio:getPrio(c.name,cwPhase)}))
     .sort((a,b)=>b.prio-a.prio);
 
@@ -102,8 +104,9 @@ export function pOverview(){
       <div style="font-size:10px;font-weight:700;color:${p.col}">● ${p.name}<br><span style="font-family:'JetBrains Mono',monospace">${rpM(pCost(p.id))}</span></div>`).join('')}
     </div>`;
 
-  // Semua compound aktif di fase — prio > 0
+  // Semua compound aktif di fase — filter by dmDealt() + prio > 0
   const phaseActive=[...COMPOUNDS]
+    .filter(dealtFilter)
     .map(c=>({...c,prio:S.ph===0?Math.round((getPrio(c.name,1)+getPrio(c.name,2)+getPrio(c.name,3))/3):getPrio(c.name,ph)}))
     .filter(c=>c.prio>0)
     .sort((a,b)=>b.prio-a.prio);
