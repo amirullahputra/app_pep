@@ -201,8 +201,8 @@ setupAuthListener();
 
 // ── INIT ──
 (async () => {
-  await loadCompoundsFromDB();
-  window._quarters = await loadQuartersFromDB();
+  try { await loadCompoundsFromDB(); } catch(e){ console.error('loadCompounds:',e); }
+  try { window._quarters = await loadQuartersFromDB(); } catch(e){ console.error('loadQuarters:',e); window._quarters=[]; }
   setInterval(renderTimer,1000);
   renderTimer();
   renderPhaseRow();
