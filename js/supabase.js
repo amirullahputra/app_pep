@@ -7,8 +7,49 @@ import { SHELF_LIFE } from './data.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
-// Supabase loaded via CDN as window.supabase
 export const supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+
+// ── LOAD FROM SUPABASE ──
+let _compoundsLoaded=false;
+let _quartersCache=null;
+
+export async function loadCompoundsFromDB(){
+  if(_compoundsLoaded)return;
+  const{data,error}=await supa.from('compounds')
+    .select('name,hiv_notes,notes,score_f1,score_f2,score_f3,price_idr')
+    .order('name');
+  if(error||!data||data.length===0){
+    console.warn('[db] Supabase compounds unavailable, using local data');
+    _compoundsLoaded=true;
+    return;
+  }
+  const dbMap={};
+  data.forEach(r=>{dbMap[r.name]=r;});
+  COMPOUNDS.forEach(c=>{
+    const r=dbMap[c.name];
+    if(!r)return;
+    if(r.hiv_notes)c.hiv_notes=r.hiv_notes;
+    if(r.notes)c.notes=r.notes;
+    if(r.score_f1!=null)c.score_f1=r.score_f1;
+    if(r.score_f2!=null)c.score_f2=r.score_f2;
+    if(r.score_f3!=null)c.score_f3=r.score_f3;
+    if(r.price_idr!=null)c.price_idr=r.price_idr;
+    c._fromDB=true;
+  });
+  _compoundsLoaded=true;
+  console.info(`[db] Merged ${data.length} compounds from Supabase`);
+}
+
+export async function loadQuartersFromDB(){
+  if(_quartersCache)return _quartersCache;
+  const{data,error}=await supa.from('quarters')
+    .select('quarter_id,phase_type,window_raw,total_weeks,bb_start,bb_end,bf_start,bf_end')
+    .order('quarter_id');
+  if(error||!data){console.warn('[db] Quarters unavailable');return[];}
+  _quartersCache=data;
+  console.info(`[db] Loaded ${data.length} quarters`);
+  return _quartersCache;
+}
 
 // ── SAVE INDICATOR ──
 export function showSaveInd(){

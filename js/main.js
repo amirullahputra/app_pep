@@ -7,6 +7,7 @@ import * as stateModule from './state.js';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
+  loadCompoundsFromDB, loadQuartersFromDB,
   openDoseEdit, closeDoseModal, confirmDoseEdit, resetDoseEdit,
   openInvEdit, closeInvModal, confirmInvEdit,
   openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
@@ -199,8 +200,12 @@ document.getElementById('dose-modal').addEventListener('click',e=>{if(e.target==
 setupAuthListener();
 
 // ── INIT ──
-setInterval(renderTimer,1000);
-renderTimer();
-renderPhaseRow();
-renderNav();
-renderPanels();
+(async () => {
+  await loadCompoundsFromDB();
+  window._quarters = await loadQuartersFromDB();
+  setInterval(renderTimer,1000);
+  renderTimer();
+  renderPhaseRow();
+  renderNav();
+  renderPanels();
+})();
