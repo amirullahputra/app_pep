@@ -1,44 +1,117 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { COMPOUNDS, VSPECS } from './data.js';
+import { _setPepData } from './data.js';
 import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js';
-import { SHELF_LIFE } from './data.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
 export const supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
-// ── LOAD FROM SUPABASE ──
-let _compoundsLoaded=false;
-let _quartersCache=null;
-let _quartersLoaded=false;
+// ── DYNAMIC PEP DATA LOAD (compounds + phases + redundancy_rules) ──
+let _pepLoaded = false;
+let _quartersLoaded = false;
+let _quartersCache = null;
 
-export async function loadCompoundsFromDB(){
-  if(_compoundsLoaded)return;
-  const{data,error}=await supa.from('compounds')
-    .select('name,hiv_notes,notes,score_f1,score_f2,score_f3,price_idr')
-    .order('name');
-  if(error||!data||data.length===0){
-    console.warn('[db] Supabase compounds unavailable, using local data');
-    _compoundsLoaded=true;
-    return;
-  }
-  const dbMap={};
-  data.forEach(r=>{dbMap[r.name]=r;});
-  COMPOUNDS.forEach(c=>{
-    const r=dbMap[c.name];
-    if(!r)return;
-    if(r.hiv_notes)c.hiv_notes=r.hiv_notes;
-    if(r.notes)c.notes=r.notes;
-    if(r.score_f1!=null)c.score_f1=r.score_f1;
-    if(r.score_f2!=null)c.score_f2=r.score_f2;
-    if(r.score_f3!=null)c.score_f3=r.score_f3;
-    if(r.price_idr!=null)c.price_idr=r.price_idr;
-    c._fromDB=true;
+function computeCostsPerPhase(compoundRow, phaseRows){
+  const out = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };
+  const doses = compoundRow.doses_jsonb || {};
+  const vSize = compoundRow.vial_size || 10;
+  const vPrice = compoundRow.vial_price_idr || 0;
+
+  Object.entries(doses).forEach(([weekStr, dose]) => {
+    const wk = parseInt(weekStr);
+    const phase = (phaseRows||[]).find(p => wk >= p.week_start && wk <= p.week_end);
+    if(!phase) return;
+    const fk = 'f'+phase.phase_id;
+    if(!out[fk]) return;
+    out[fk].mg += parseFloat(dose) || 0;
+    out.tot.mg += parseFloat(dose) || 0;
   });
-  _compoundsLoaded=true;
-  console.info(`[db] Merged ${data.length} compounds from Supabase`);
+
+  ['f1','f2','f3'].forEach(p => {
+    if(out[p].mg > 0){
+      out[p].v = Math.ceil(out[p].mg / vSize);
+      out[p].cost = out[p].v * vPrice;
+    }
+  });
+  out.tot.v = out.f1.v + out.f2.v + out.f3.v;
+  out.tot.cost = out.f1.cost + out.f2.cost + out.f3.cost;
+  return out;
+}
+
+export async function loadAllPepData(){
+  if(_pepLoaded) return;
+
+  const [cRes, pRes, rRes] = await Promise.all([
+    supa.from('compounds').select('*').order('sort_order',{nullsFirst:false}).order('name'),
+    supa.from('phases').select('*').order('sort_order'),
+    supa.from('redundancy_rules').select('*').order('sort_order'),
+  ]);
+  if(cRes.error){ console.error('[db] compounds load:', cRes.error); throw cRes.error; }
+  if(pRes.error){ console.error('[db] phases load:',    pRes.error); throw pRes.error; }
+  if(rRes.error){ console.error('[db] rules load:',     rRes.error); throw rRes.error; }
+
+  const compoundRows = cRes.data || [];
+  const phaseRows    = pRes.data || [];
+  const ruleRows     = rRes.data || [];
+
+  // Build derived structures
+  const SC={}, SP={}, MECHS={}, VSPECS={}, SHELF_LIFE={};
+  const COMPOUNDS = [];
+  compoundRows.forEach(r => {
+    SC[r.name] = {
+      f1:{r:r.score_f1||0, p:r.score_f1||0},
+      f2:{r:r.score_f2||0, p:r.score_f2||0},
+      f3:{r:r.score_f3||0, p:r.score_f3||0}
+    };
+    SP[r.name] = {
+      z2:r.sport_z2||0, pw:r.sport_pw||0, rc:r.sport_rc||0,
+      hr:r.sport_hr||0, cn:r.sport_cn||0, risk:r.risk_text||''
+    };
+    MECHS[r.name] = r.mechanism || '';
+    VSPECS[r.name] = {
+      unit:r.vial_unit||'mg', vSize:r.vial_size||10,
+      vPrice:r.vial_price_idr||0, label:r.vial_label||''
+    };
+    SHELF_LIFE[r.name] = { shelf:r.shelf_life_days, timing:r.timing_note||'' };
+
+    COMPOUNDS.push({
+      name:r.name, cat:r.category||'off',
+      hiv_notes:r.hiv_notes, notes:r.notes,
+      d: r.doses_jsonb || {},
+      c: computeCostsPerPhase(r, phaseRows),
+    });
+  });
+
+  // Phase shape compatibility with old data.js (PHASES had id, cls, name, bf, wS, wE, wk, defisit, label, desc, col, selCls)
+  const PHASES = phaseRows.map(p => ({
+    id: parseInt(p.phase_id),
+    cls: p.color,
+    name: p.name,
+    bf: p.bf_range,
+    wS: p.week_start, wE: p.week_end, wk: p.total_weeks,
+    defisit: p.defisit, label: p.label, desc: p.description,
+    col: `var(--${p.color})`,
+    selCls: p.sel_class
+  }));
+
+  const REDUNDANCY = ruleRows.map(r => ({
+    id:r.id, lvl:r.level, title:r.title, body:r.body,
+    rec:r.recommendation, cmps:r.compound_names||[], thresh:r.threshold||2
+  }));
+
+  _setPepData({ phases:PHASES, compounds:COMPOUNDS, redundancy:REDUNDANCY, sc:SC, sp:SP, mechs:MECHS, vspecs:VSPECS, shelf:SHELF_LIFE });
+  _pepLoaded = true;
+  console.info(`[db] Loaded ${COMPOUNDS.length} compounds, ${PHASES.length} phases, ${REDUNDANCY.length} rules`);
+}
+
+export async function saveCompoundEdit(name, updates){
+  // updates: object with any fields to update on compounds row
+  const { error } = await supa.from('compounds').update(updates).eq('name', name);
+  if(error){ console.error('saveCompoundEdit:', error); throw error; }
+  // Force reload on next call
+  _pepLoaded = false;
 }
 
 export async function loadQuartersFromDB(){
