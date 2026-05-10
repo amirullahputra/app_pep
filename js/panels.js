@@ -916,7 +916,7 @@ export function pCompounds(){
         </div>`;
       }).join('')}
     </div>
-    <div class="note">Score = sum semua compound di protokol. Critical path lo: Zone 2 + Power = SS-31, MOTS-c, SLU-PP-332, CJC-1295+IPA, IGF-1 LR3.</div>
+    <div class="note">Score = sum semua compound di protokol. Critical path lo: Zone 2 + Power = SS-31, MOTS-c, SLU-PP-332, Ipamorelin, IGF-1 LR3.</div>
   </div>`;
 
   const filtered=[...COMPOUNDS]
