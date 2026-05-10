@@ -1,13 +1,11 @@
 // ══════════════════════════════════════════════════════════
-// DATA
+// DATA — placeholders populated at runtime from Supabase
 // ══════════════════════════════════════════════════════════
+// Master data (PHASES, COMPOUNDS, SC, SP, MECHS, VSPECS, SHELF_LIFE, REDUNDANCY)
+// is now loaded dynamically via loadAllPepData() in supabase.js.
+// data.js only keeps UI styling maps that aren't user-data.
 
-export const PHASES=[
-  {id:1,cls:'f1',name:'Fase 1',bf:'>15% BF; 65kg',wS:1,wE:28,wk:28,defisit:'500–750 kcal',label:'Offensive Dominant',desc:'Aggressive cut. Offensive layer 40%. Cardio volume max.',col:'var(--f1)',selCls:'sel-f1'},
-  {id:2,cls:'f2',name:'Fase 2',bf:'15–10% BF; 61kg-65kg',wS:29,wE:44,wk:16,defisit:'350–500 kcal',label:'Transisi Kritis',desc:'Balancing offensive–defensive. Hormonal axis entry.',col:'var(--f2)',selCls:'sel-f2'},
-  {id:3,cls:'f3',name:'Fase 3',bf:'10–6% BF; 57kg-61kg',wS:45,wE:56,wk:12,defisit:'200–300 kcal',label:'Precision Defense',desc:'Muscle rescue mode. Hormonal + defensive dominan.',col:'var(--f3)',selCls:'sel-f3'},
-];
-
+// UI category styling (color/label) — not user-editable, hardcoded design choice
 export const CAT={
   off:{n:'Fat Loss',cls:'l-off',col:'var(--f1)'},
   met:{n:'Metabolic',cls:'l-met',col:'var(--f2)'},
@@ -17,6 +15,7 @@ export const CAT={
   inf:{n:'Support',cls:'l-inf',col:'var(--inf)'},
 };
 
+// Layer weight allocations (percentages per phase) — UI tuning, not data
 export const LW={
   off:{f1:40,f2:25,f3:10,col:'var(--f1)',n:'Offensive'},
   met:{f1:20,f2:12,f3:7, col:'var(--f2)',n:'Metabolic'},
@@ -26,178 +25,27 @@ export const LW={
   inf:{f1:15,f2:15,f3:18,col:'var(--inf)',n:'Support'},
 };
 
-// Priority scores
-export const SC={
-  'Retatrutide':    {f1:{r:95,p:95},f2:{r:65,p:65},f3:{r:15,p:6}},
-  'AOD-9604':       {f1:{r:85,p:85},f2:{r:70,p:70},f3:{r:80,p:32}},
-  'Tesamorelin':    {f1:{r:80,p:80},f2:{r:75,p:75},f3:{r:70,p:28}},
-  '5-Amino-1MQ':    {f1:{r:78,p:78},f2:{r:55,p:55},f3:{r:30,p:12}},
-  'Cagrilintide':   {f1:{r:72,p:72},f2:{r:58,p:58},f3:{r:10,p:4}},
-  'SLU-PP-332':     {f1:{r:75,p:38},f2:{r:68,p:33},f3:{r:40,p:11}},
-  'MOTS-c':         {f1:{r:82,p:41},f2:{r:78,p:37},f3:{r:65,p:18}},
-  'NAD+':           {f1:{r:65,p:33},f2:{r:60,p:29},f3:{r:68,p:19}},
-  'ARA-290':        {f1:{r:40,p:15},f2:{r:60,p:36},f3:{r:70,p:50}},
-  'BPC-157':        {f1:{r:60,p:23},f2:{r:78,p:47},f3:{r:88,p:63}},
-  'Ipamorelin':     {f1:{r:55,p:11},f2:{r:72,p:58},f3:{r:78,p:78}},
-  'IGF-1 LR3':      {f1:{r:25,p:5}, f2:{r:60,p:48},f3:{r:80,p:80}},
-  'TB-500':         {f1:{r:50,p:19},f2:{r:72,p:43},f3:{r:85,p:61}},
-  'HCG':            {f1:{r:15,p:3}, f2:{r:40,p:24},f3:{r:88,p:78}},
-  'HGH':            {f1:{r:40,p:8}, f2:{r:55,p:44},f3:{r:78,p:78}},
-  'HMG':            {f1:{r:10,p:2}, f2:{r:25,p:15},f3:{r:72,p:63}},
-  'Kisspeptin-10':  {f1:{r:35,p:6}, f2:{r:75,p:45},f3:{r:88,p:78}},
-  'DSIP':           {f1:{r:60,p:15},f2:{r:65,p:34},f3:{r:82,p:59}},
-  'Epitalon':       {f1:{r:65,p:16},f2:{r:70,p:36},f3:{r:82,p:59}},
-  'Selank':         {f1:{r:35,p:9}, f2:{r:65,p:34},f3:{r:78,p:56}},
-  'Semax':          {f1:{r:30,p:8}, f2:{r:55,p:29},f3:{r:75,p:54}},
-  'KPV':            {f1:{r:65,p:24},f2:{r:45,p:27},f3:{r:30,p:22}},
-  'SS-31':          {f1:{r:80,p:30},f2:{r:75,p:45},f3:{r:85,p:61}},
-  'Thymosin Alpha-1':{f1:{r:30,p:11},f2:{r:45,p:27},f3:{r:70,p:50}},
-};
+// ── DYNAMIC DATA (populated by loadAllPepData) ──
+// These are `let` so supabase.js can mutate. Other modules import these names
+// and reference them indirectly (since they're populated AFTER init, not at parse).
+// To get current value, ALWAYS access via these exports — don't cache locally.
+export let PHASES = [];
+export let COMPOUNDS = [];
+export let REDUNDANCY = [];
+export let SC = {};
+export let SP = {};
+export let MECHS = {};
+export let VSPECS = {};
+export let SHELF_LIFE = {};
 
-// Sport Profile: z2=Zone2, pw=Power, rc=Recovery, hr=Hormonal, cn=CNS  (0-5)
-export const SP={
-  'Retatrutide':   {z2:2,pw:2,rc:1,hr:2,cn:1,risk:'GI risk — pause 2h sebelum cardio intens'},
-  'AOD-9604':      {z2:4,pw:3,rc:2,hr:1,cn:1,risk:''},
-  'Tesamorelin':    {z2:4,pw:3,rc:2,hr:2,cn:1,risk:'GH axis — jangan stack +HGH bersamaan'},
-  '5-Amino-1MQ':   {z2:3,pw:2,rc:1,hr:1,cn:2,risk:''},
-  'Cagrilintide':  {z2:1,pw:1,rc:1,hr:1,cn:1,risk:'Gabung Reta full dose → protein defisit'},
-  'SLU-PP-332':    {z2:5,pw:3,rc:2,hr:1,cn:2,risk:''},
-  'MOTS-c':        {z2:5,pw:4,rc:3,hr:1,cn:2,risk:''},
-  'NAD+':          {z2:3,pw:3,rc:3,hr:1,cn:2,risk:''},
-  'ARA-290':       {z2:2,pw:2,rc:4,hr:1,cn:3,risk:''},
-  'BPC-157':       {z2:2,pw:2,rc:5,hr:1,cn:1,risk:'Double dose jika +TB-500 standalone'},
-  'Ipamorelin':    {z2:3,pw:4,rc:4,hr:3,cn:2,risk:'GH axis — hati-hati stack Tesamorelin/HGH'},
-  'IGF-1 LR3':     {z2:2,pw:4,rc:4,hr:2,cn:1,risk:'Hypoglycemia. Butuh protein ≥2g/kg'},
-  'TB-500':        {z2:2,pw:2,rc:5,hr:1,cn:1,risk:'Double dose jika +BPC-157 standalone'},
-  'HCG':           {z2:1,pw:3,rc:2,hr:5,cn:2,risk:'HPG over-stim jika stack 3'},
-  'HGH':           {z2:3,pw:4,rc:3,hr:3,cn:1,risk:'GH axis — jangan stack +Tesamorelin bersamaan'},
-  'HMG':           {z2:1,pw:2,rc:1,hr:4,cn:1,risk:'Konfirmasi bloodwork FSH/LH dulu'},
-  'Kisspeptin-10': {z2:2,pw:3,rc:2,hr:5,cn:2,risk:'HPG over-stim jika stack 3'},
-  'DSIP':          {z2:2,pw:1,rc:4,hr:1,cn:4,risk:''},
-  'Epitalon':      {z2:2,pw:2,rc:4,hr:2,cn:4,risk:''},
-  'Selank':        {z2:3,pw:1,rc:3,hr:1,cn:5,risk:'Selank sore/malam jika stack Semax'},
-  'Semax':         {z2:2,pw:2,rc:2,hr:1,cn:5,risk:'Semax pagi jika stack Selank'},
-  'KPV':           {z2:1,pw:1,rc:3,hr:1,cn:1,risk:''},
-  'SS-31':         {z2:5,pw:4,rc:4,hr:1,cn:2,risk:''},
-  'Thymosin Alpha-1':{z2:1,pw:1,rc:3,hr:1,cn:1,risk:''},
-};
-
-export const MECHS={
-  'Retatrutide':'Triple agonist GLP-1/GIP/Glucagon → lipolysis + satiety + insulin sensitivity',
-  'AOD-9604':'GH fragment 177–191 → targeted lipolysis tanpa IGF-1 activation',
-  'Tesamorelin':'GHRH analog → visceral fat attack + GH axis stimulation (AM fasted)',
-  '5-Amino-1MQ':'NNMT inhibitor → NAD+ upstream → dormant fat cell activation',
-  'Cagrilintide':'Amylin analog → extended satiety + gastric emptying modulation',
-  'SLU-PP-332':'PPARδ agonist → fat oxidation amplifier + mitokondrial biogenesis',
-  'MOTS-c':'AMPK activation → fat oxidation + insulin sensitization + endurance output',
-  'NAD+':'Sirtuins substrate → upstream MOTS-c + 5-Amino + ATP energy currency',
-  'ARA-290':'Innate repair receptor → peripheral neuroprotection + anti-inflammatory',
-  'BPC-157':'Gut + systemic healing → tendon/ligament repair + gut barrier integrity',
-  'Ipamorelin':'GHRP → selective GH pulse amplification → anabolic + recovery (fasted)',
-  'IGF-1 LR3':'Long-acting IGF-1 (20-30h) → MPS + anti-catabolism; protein ≥2g/kg',
-  'TB-500':'Thymosin Beta-4 → actin polymerization + tissue repair + hip/knee joints',
-  'HCG':'LH analog → testicular Leydig cell stimulation, bypass pituitary',
-  'HGH':'Full GH → body composition + lipolysis + IGF-1 via liver',
-  'HMG':'FSH + LH analog → spermatogenesis + testicular volume; butuh bloodwork',
-  'Kisspeptin-10':'KNDy neuron → GnRH pulsatility → LH/FSH → testosterone upstream HPG',
-  'DSIP':'Delta sleep peptide → sleep deepening + cortisol normalization',
-  'Epitalon':'Telomerase activator + pineal → sleep architecture + nocturnal GH pulse',
-  'Selank':'GABA modulation + cortisol attenuation; HPA axis dampening (sore/malam)',
-  'Semax':'ACTH 4-7 → BDNF + cognitive clarity; combats brain fog from low carbs',
-  'KPV':'Anti-inflammatory tripeptide → NF-κB inhibition; adipose tissue recovery',
-  'SS-31':'Mitochondrial cardiolipin → ROS reduction + ETC efficiency (Zone 2 kritis)',
-  'Thymosin Alpha-1':'Thymic peptide → T-cell activation; immune protection prolonged deficit',
-};
-
-// Vial specs — basis harga dari final.xlsx
-export const VSPECS={
-  '5-Amino-1MQ': {unit:'mg',vSize:50, vPrice:900000, label:'50mg/vial'},
-  'AOD-9604':    {unit:'mg',vSize:10, vPrice:1300000,label:'10mg/vial'},
-  'Cagrilintide':{unit:'mg',vSize:10, vPrice:800000, label:'10mg/vial'},
-  'Retatrutide': {unit:'mg',vSize:20, vPrice:1200000,label:'20mg/vial'},
-  'Tesamorelin': {unit:'mg',vSize:40, vPrice:1500000,label:'40mg/vial'},
-  'MOTS-c':      {unit:'mg',vSize:40, vPrice:1400000,label:'40mg/vial'},
-  'NAD+':        {unit:'mg',vSize:1000,vPrice:800000,label:'1000mg/vial'},
-  'SLU-PP-332':  {unit:'mg',vSize:2000,vPrice:4000000,label:'100 tab (20mg)'},
-  'ARA-290':     {unit:'mg',vSize:10, vPrice:850000, label:'10mg/vial'},
-  'BPC-157':     {unit:'mg',vSize:10, vPrice:650000, label:'10mg/vial'},
-  'Ipamorelin':  {unit:'mg',vSize:10, vPrice:750000, label:'10mg/vial'},
-  'IGF-1 LR3':   {unit:'mg',vSize:1,  vPrice:1350000,label:'1mg/vial'},
-  'TB-500':      {unit:'mg',vSize:10, vPrice:750000, label:'10mg/vial'},
-  'HCG':         {unit:'IU',vSize:10000,vPrice:800000,label:'10,000 IU/vial'},
-  'HGH':         {unit:'IU',vSize:36, vPrice:700000, label:'36 IU/vial'},
-  'HMG':         {unit:'IU',vSize:75, vPrice:650000, label:'75 IU/vial'},
-  'Kisspeptin-10':{unit:'mg',vSize:10,vPrice:900000, label:'10mg/vial'},
-  'DSIP':        {unit:'mg',vSize:10, vPrice:600000, label:'10mg/vial'},
-  'Epitalon':    {unit:'mg',vSize:50, vPrice:1000000,label:'50mg/vial'},
-  'Selank':      {unit:'mg',vSize:10, vPrice:500000, label:'10mg/vial'},
-  'Semax':       {unit:'mg',vSize:10, vPrice:500000, label:'10mg/vial'},
-  'KPV':         {unit:'mg',vSize:10, vPrice:600000, label:'10mg/vial'},
-  'SS-31':       {unit:'mg',vSize:50, vPrice:1500000,label:'50mg/vial'},
-  'Thymosin Alpha-1':{unit:'mg',vSize:10,vPrice:1100000,label:'10mg/vial'},
-};
-
-// Compound data from XLSX — doses per week + costs per phase
-export const COMPOUNDS = [
-  {name:"5-Amino-1MQ",cat:"off",d:{"1":2.5,"2":2.5,"3":2.5,"4":2.5,"5":2.5,"8":2.5,"13":2.5,"14":2.5,"15":2.5,"16":2.5,"17":2.5,"20":2.5,"25":2.5,"26":2.5,"27":2.5,"28":2.5,"29":2.5,"32":2.5,"37":2.5,"38":2.5,"39":2.5,"40":2.5,"41":2.5,"44":2.5,"49":2.5,"50":2.5,"51":2.5,"52":2.5,"53":2.5,"56":2.5,"61":2.5,"62":2.5,"63":2.5,"64":2.5,"65":2.5,"68":2.5},c:{"f1":{"mg":30,"v":0,"cost":0},"f2":{"mg":30,"v":0,"cost":0},"f3":{"mg":30,"v":0,"cost":0},"tot":{"mg":90,"v":0,"cost":0}}},
-  {name:"AOD-9604",cat:"off",d:{"1":2.45,"2":2.45,"3":2.45,"4":2.45,"5":2.45,"6":2.45,"7":2.45,"8":2.45,"13":2.45,"14":2.45,"15":2.45,"16":2.45,"17":2.45,"18":2.45,"19":2.45,"20":2.45,"25":2.45,"26":2.45,"27":2.45,"28":2.45,"29":2.45,"30":2.45,"31":2.45,"32":2.45,"37":2.45,"38":2.45,"39":2.45,"40":2.45,"41":2.45,"42":2.45,"43":2.45,"44":2.45,"49":2.45,"50":2.45,"51":2.45,"52":2.45,"53":2.45,"54":2.45,"55":2.45,"56":2.45,"61":2.45,"62":2.45,"63":2.45,"64":2.45,"65":2.45,"66":2.45,"67":2.45,"68":2.45},c:{"f1":{"mg":39.2,"v":0,"cost":0},"f2":{"mg":39.2,"v":0,"cost":0},"f3":{"mg":39.2,"v":0,"cost":0},"tot":{"mg":117.6,"v":0,"cost":0}}},
-  {name:"Cagrilintide",cat:"off",d:{"1":0.6,"2":0.6,"3":0.6,"4":0.6,"5":1.2,"6":1.2,"7":1.2,"8":1.2,"13":2.4,"14":2.4,"15":2.4,"16":2.4,"17":2.4,"18":2.4,"19":2.4,"20":2.4,"25":2.4,"26":2.4,"27":2.4,"28":2.4,"29":2.4,"30":2.4,"31":2.4,"32":2.4,"37":2.4,"38":2.4,"39":2.4,"40":2.4,"41":2.4,"42":2.4,"43":2.4,"44":2.4,"49":2.4,"50":2.4,"51":2.4,"52":2.4,"53":2.4,"54":2.4,"55":2.4,"56":2.4,"61":2.4,"62":2.4,"63":2.4,"64":2.4,"65":2.4,"66":2.4,"67":2.4,"68":2.4},c:{"f1":{"mg":26.4,"v":0,"cost":0},"f2":{"mg":38.4,"v":0,"cost":0},"f3":{"mg":38.4,"v":0,"cost":0},"tot":{"mg":103.2,"v":0,"cost":0}}},
-  {name:"Retatrutide",cat:"off",d:{"1":4,"2":4,"3":4,"4":4,"5":6,"6":6,"7":6,"8":6,"13":6,"14":6,"15":6,"16":6,"17":8,"18":8,"19":8,"20":8,"25":2,"26":2,"27":2,"28":2,"29":2,"30":2,"31":2,"32":2,"37":2,"38":2,"39":2,"40":2,"41":2,"42":2,"43":2,"44":2},c:{"f1":{"mg":96,"v":0,"cost":0},"f2":{"mg":32,"v":0,"cost":0},"f3":{"mg":0,"v":0,"cost":0},"tot":{"mg":128,"v":0,"cost":0}}},
-  {name:"Tesamorelin",cat:"off",d:{"1":12,"2":12,"3":12,"4":12,"5":12,"6":12,"7":12,"8":12,"13":12,"14":12,"15":12,"16":12,"17":12,"18":12,"19":12,"20":12,"25":12,"26":12,"27":12,"28":12,"29":12,"30":12,"31":12,"32":12,"37":12,"38":12,"39":12,"40":12,"41":12,"42":12,"43":12,"44":12},c:{"f1":{"mg":192,"v":0,"cost":0},"f2":{"mg":192,"v":0,"cost":0},"f3":{"mg":0,"v":0,"cost":0},"tot":{"mg":384,"v":0,"cost":0}}},
-  {name:"Ipamorelin",cat:"def",d:{"1":2.1,"2":2.1,"3":2.1,"4":2.1,"5":2.1,"6":2.1,"7":2.1,"8":2.1,"13":2.1,"14":2.1,"15":2.1,"16":2.1,"17":2.1,"18":2.1,"19":2.1,"20":2.1,"25":2.1,"26":2.1,"27":2.1,"28":2.1,"29":2.1,"30":2.1,"31":2.1,"32":2.1,"37":2.1,"38":2.1,"39":2.1,"40":2.1,"41":2.1,"42":2.1,"43":2.1,"44":2.1},c:{"f1":{"mg":33.6,"v":0,"cost":0},"f2":{"mg":33.6,"v":0,"cost":0},"f3":{"mg":0,"v":0,"cost":0},"tot":{"mg":67.2,"v":0,"cost":0}}},
-  {name:"MOTS-c",cat:"met",d:{"5":15,"6":15,"7":15,"8":15,"17":15,"18":15,"19":15,"20":15,"29":15,"30":15,"31":15,"32":15,"41":15,"42":15,"43":15,"44":15,"53":15,"54":15,"55":15,"56":15,"65":15,"66":15,"67":15,"68":15},c:{"f1":{"mg":120,"v":0,"cost":0},"f2":{"mg":120,"v":0,"cost":0},"f3":{"mg":120,"v":0,"cost":0},"tot":{"mg":360,"v":0,"cost":0}}},
-  {name:"NAD+",cat:"met",d:{"5":300,"6":300,"7":300,"8":300,"17":300,"18":300,"19":300,"20":300,"29":300,"30":300,"31":300,"32":300,"41":300,"42":300,"43":300,"44":300,"53":300,"54":300,"55":300,"56":300,"65":300,"66":300,"67":300,"68":300},c:{"f1":{"mg":2400,"v":0,"cost":0},"f2":{"mg":2400,"v":0,"cost":0},"f3":{"mg":2400,"v":0,"cost":0},"tot":{"mg":7200,"v":0,"cost":0}}},
-  {name:"SLU-PP-332",cat:"met",d:{"1":70,"2":70,"3":70,"4":70,"5":70,"6":70,"7":70,"8":70,"13":70,"14":70,"15":70,"16":70,"17":70,"18":70,"19":70,"20":70,"25":70,"26":70,"27":70,"28":70,"29":70,"30":70,"31":70,"32":70,"37":70,"38":70,"39":70,"40":70,"41":70,"42":70,"43":70,"44":70,"49":70,"50":70,"51":70,"52":70,"53":70,"54":70,"55":70,"56":70,"61":70,"62":70,"63":70,"64":70,"65":70,"66":70,"67":70,"68":70},c:{"f1":{"mg":1120,"v":0,"cost":0},"f2":{"mg":1120,"v":0,"cost":0},"f3":{"mg":1120,"v":0,"cost":0},"tot":{"mg":3360,"v":0,"cost":0}}},
-  {name:"ARA-290",cat:"def",d:{"29":12,"30":12,"31":12,"32":12,"41":12,"42":12,"43":12,"44":12,"53":12,"54":12,"55":12,"56":12,"65":12,"66":12,"67":12,"68":12},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":96,"v":0,"cost":0},"f3":{"mg":96,"v":0,"cost":0},"tot":{"mg":192,"v":0,"cost":0}}},
-  {name:"BPC-157",cat:"def",d:{"1":3.5,"2":3.5,"3":3.5,"4":3.5,"5":3.5,"6":3.5,"7":3.5,"8":3.5,"13":3.5,"14":3.5,"15":3.5,"16":3.5,"17":3.5,"18":3.5,"19":3.5,"20":3.5},c:{"f1":{"mg":56,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":0,"v":0,"cost":0},"tot":{"mg":56,"v":0,"cost":0}}},
-  {name:"IGF-1 LR3",cat:"def",d:{"53":0.175,"54":0.175,"55":0.175,"56":0.175,"65":0.175,"66":0.175,"67":0.175,"68":0.175},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":1.4,"v":0,"cost":0},"tot":{"mg":1.4,"v":0,"cost":0}}},
-  {name:"TB-500",cat:"def",d:{"29":4,"30":4,"31":4,"32":4,"41":4,"42":4,"43":4,"44":4,"53":4,"54":4,"55":4,"56":4,"65":4,"66":4,"67":4,"68":4},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":32,"v":0,"cost":0},"f3":{"mg":32,"v":0,"cost":0},"tot":{"mg":64,"v":0,"cost":0}}},
-  {name:"HCG",cat:"hor",d:{"49":3500,"50":3500,"51":3500,"52":3500,"53":3500,"54":3500,"55":3500,"56":3500,"61":3500,"62":3500,"63":3500,"64":3500,"65":3500,"66":3500,"67":3500,"68":3500},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":56000,"v":0,"cost":0},"tot":{"mg":56000,"v":0,"cost":0}}},
-  {name:"HGH",cat:"hor",d:{"49":14,"50":14,"51":14,"52":14,"53":14,"54":14,"55":14,"56":14,"61":14,"62":14,"63":14,"64":14,"65":14,"66":14,"67":14,"68":14},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":224,"v":0,"cost":0},"tot":{"mg":224,"v":0,"cost":0}}},
-  {name:"HMG",cat:"hor",d:{"53":150,"54":150,"55":150,"56":150,"65":150,"66":150,"67":150,"68":150},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":1200,"v":0,"cost":0},"tot":{"mg":1200,"v":0,"cost":0}}},
-  {name:"Kisspeptin-10",cat:"hor",d:{"49":1.75,"50":1.75,"51":1.75,"52":1.75,"53":1.75,"54":1.75,"55":1.75,"56":1.75,"61":1.75,"62":1.75,"63":1.75,"64":1.75,"65":1.75,"66":1.75,"67":1.75,"68":1.75},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":28,"v":0,"cost":0},"tot":{"mg":28,"v":0,"cost":0}}},
-  {name:"DSIP",cat:"cns",d:{"5":3.5,"6":3.5,"7":3.5,"8":3.5,"17":3.5,"18":3.5,"19":3.5,"20":3.5,"29":3.5,"30":3.5,"31":3.5,"32":3.5,"41":3.5,"42":3.5,"43":3.5,"44":3.5,"53":3.5,"54":3.5,"55":3.5,"56":3.5,"65":3.5,"66":3.5,"67":3.5,"68":3.5},c:{"f1":{"mg":28,"v":0,"cost":0},"f2":{"mg":28,"v":0,"cost":0},"f3":{"mg":28,"v":0,"cost":0},"tot":{"mg":84,"v":0,"cost":0}}},
-  {name:"Epitalon",cat:"cns",d:{"19":30,"20":70,"67":30,"68":70},c:{"f1":{"mg":100,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":100,"v":0,"cost":0},"tot":{"mg":200,"v":0,"cost":0}}},
-  {name:"Selank",cat:"cns",d:{"25":2.45,"26":2.45,"27":2.45,"28":2.45,"29":2.45,"30":2.45,"31":2.45,"32":2.45,"37":2.45,"38":2.45,"39":2.45,"40":2.45,"41":2.45,"42":2.45,"43":2.45,"44":2.45,"49":2.45,"50":2.45,"51":2.45,"52":2.45,"53":2.45,"54":2.45,"55":2.45,"56":2.45,"61":2.45,"62":2.45,"63":2.45,"64":2.45,"65":2.45,"66":2.45,"67":2.45,"68":2.45},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":39.2,"v":0,"cost":0},"f3":{"mg":39.2,"v":0,"cost":0},"tot":{"mg":78.4,"v":0,"cost":0}}},
-  {name:"Semax",cat:"cns",d:{"49":2.45,"50":2.45,"51":2.45,"52":2.45,"53":2.45,"54":2.45,"55":2.45,"56":2.45,"61":2.45,"62":2.45,"63":2.45,"64":2.45,"65":2.45,"66":2.45,"67":2.45,"68":2.45},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":39.2,"v":0,"cost":0},"tot":{"mg":39.2,"v":0,"cost":0}}},
-  {name:"SS-31",cat:"inf",d:{"1":50,"2":50,"3":50,"4":50,"13":50,"14":50,"15":50,"16":50,"25":50,"26":50,"27":50,"28":50,"37":50,"38":50,"39":50,"40":50,"49":50,"50":50,"51":50,"52":50,"61":50,"62":50,"63":50,"64":50},c:{"f1":{"mg":400,"v":0,"cost":0},"f2":{"mg":400,"v":0,"cost":0},"f3":{"mg":400,"v":0,"cost":0},"tot":{"mg":1200,"v":0,"cost":0}}},
-  {name:"Thymosin Alpha-1",cat:"inf",d:{"29":4,"30":4,"31":4,"32":4,"41":4,"42":4,"43":4,"44":4,"53":4,"54":4,"55":4,"56":4,"65":4,"66":4,"67":4,"68":4},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":32,"v":0,"cost":0},"f3":{"mg":32,"v":0,"cost":0},"tot":{"mg":64,"v":0,"cost":0}}},
-  {name:"KPV",cat:"inf",d:{"49":3.5,"50":3.5,"51":3.5,"52":3.5,"53":3.5,"54":3.5,"55":3.5,"56":3.5,"61":3.5,"62":3.5,"63":3.5,"64":3.5,"65":3.5,"66":3.5,"67":3.5,"68":3.5},c:{"f1":{"mg":0,"v":0,"cost":0},"f2":{"mg":0,"v":0,"cost":0},"f3":{"mg":56,"v":0,"cost":0},"tot":{"mg":56,"v":0,"cost":0}}},
-];
-
-export const REDUNDANCY=[
-  {id:'gh3',lvl:'HIGH',title:'GH Axis Double Stack',body:'Tesamorelin + HGH bersamaan → saturasi IGF-1 suprafisiologis. Risk: organ concern.',rec:'Pilih salah satu per fase. Tesamorelin F1–2, HGH di F3.',cmps:['Tesamorelin','HGH'],thresh:2},
-  {id:'bpctb',lvl:'HIGH',title:'BPC-157 + TB-500 Double Dose',body:'BPC+TB standalone sudah = Wolverine blend. Jangan tambah vial Wolverine terpisah.',rec:'Gunakan BPC + TB standalone seperti di protokol. Tidak perlu beli Wolverine blend.',cmps:['BPC-157','TB-500'],thresh:2},
-  {id:'rc',lvl:'HIGH',title:'Retatrutide + Cagrilintide Full Stack',body:'Combined appetite suppression → inadequate protein → muscle catabolism (kritis Fase 2+).',rec:'Reta full dose → pause Cagrilintide. Reta taper → Cagrilintide boleh lanjut.',cmps:['Retatrutide','Cagrilintide'],thresh:2},
-  {id:'ih',lvl:'MED',title:'IGF-1 LR3 + HGH — Dual IGF-1',body:'Dual IGF-1 elevation → uncontrolled mitogenic signaling, hypoglycemia risk.',rec:'Pilih salah satu per fase. Jika keduanya F3, pastikan weeks tidak overlap.',cmps:['IGF-1 LR3','HGH'],thresh:2},
-  {id:'hpg',lvl:'MED',title:'HCG + Kisspeptin + HMG — HPG Triple',body:'HPG axis over-stimulation. HMG hanya jika FSH drop confirmed via bloodwork.',rec:'Mulai HCG + Kisspeptin dulu. Tambah HMG hanya setelah bloodwork konfirmasi.',cmps:['HCG','Kisspeptin-10','HMG'],thresh:3},
-  {id:'ss',lvl:'LOW',title:'Selank + Semax — Jadwal Ketat',body:'Semax stimulant-adjacent vs Selank anxiolytic. Tidak kontraindikasi tapi jadwal salah → insomnia.',rec:'Semax pagi. Selank sore/malam (1–2h sebelum tidur).',cmps:['Selank','Semax'],thresh:2},
-];
-
-// shelf: hari ketahanan setelah rekonstituasi (null = oral/kapsul, tidak perlu rekonstituasi)
-export const SHELF_LIFE={
-  'SS-31':          {shelf:21,  timing:'Bebas (Pagi lebih disarankan)'},
-  'MOTS-c':         {shelf:30,  timing:'Pagi atau Sebelum Kardio'},
-  'NAD+':           {shelf:30,  timing:'Pagi hari'},
-  'Retatrutide':    {shelf:30,  timing:'Bebas (Umumnya Pagi)'},
-  'AOD-9604':       {shelf:30,  timing:'Pagi (Perut Kosong) / Fasted Cardio'},
-  '5-Amino-1MQ':    {shelf:null,timing:'Pagi atau Siang hari'},
-  'SLU-PP-332':     {shelf:null,timing:'Pagi / Sebelum latihan'},
-  'HGH':            {shelf:30,  timing:'Pagi (Fasted) atau Malam'},
-  'IGF-1 LR3':      {shelf:30,  timing:'Segera setelah latihan (Post-Workout)'},
-  'HCG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
-  'HMG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
-  'Kisspeptin-10':  {shelf:45,  timing:'Pagi hari'},
-  'Ipamorelin':     {shelf:45,  timing:'Malam (Perut kosong sebelum tidur)'},
-  'BPC-157':        {shelf:45,  timing:'Pagi atau setelah latihan beban'},
-  'TB-500':         {shelf:45,  timing:'Bebas (Suntik 2x seminggu)'},
-  'ARA-290':        {shelf:21,  timing:'Pagi atau sebelum latihan'},
-  'Epitalon':       {shelf:45,  timing:'Pagi hari'},
-  'DSIP':           {shelf:21,  timing:'Malam (30-60 menit sebelum tidur)'},
-  'Semax':          {shelf:30,  timing:'Pagi / Sebelum mulai kerja keras'},
-  'Selank':         {shelf:30,  timing:'Sore / Malam (Saat stres & mau santai)'},
-  'KPV':            {shelf:45,  timing:'Pagi (Perut kosong)'},
-  'Thymosin Alpha-1':{shelf:30,  timing:'Pagi hari'},
-  'Cagrilintide':   {shelf:30,  timing:'Bebas (Umumnya Pagi)'},
-  'Tesamorelin':    {shelf:30,  timing:'Pagi (Fasted)'},
-};
+// Setter — called by supabase.js after fetch
+export function _setPepData({phases, compounds, redundancy, sc, sp, mechs, vspecs, shelf}){
+  PHASES = phases;
+  COMPOUNDS = compounds;
+  REDUNDANCY = redundancy;
+  SC = sc;
+  SP = sp;
+  MECHS = mechs;
+  VSPECS = vspecs;
+  SHELF_LIFE = shelf;
+}
