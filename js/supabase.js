@@ -12,6 +12,7 @@ export const supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 // ── LOAD FROM SUPABASE ──
 let _compoundsLoaded=false;
 let _quartersCache=null;
+let _quartersLoaded=false;
 
 export async function loadCompoundsFromDB(){
   if(_compoundsLoaded)return;
@@ -41,13 +42,14 @@ export async function loadCompoundsFromDB(){
 }
 
 export async function loadQuartersFromDB(){
-  if(_quartersCache)return _quartersCache;
+  if(_quartersLoaded)return _quartersCache||[];
   const{data,error}=await supa.from('quarters')
     .select('quarter_id,phase_type,window_raw,total_weeks,bb_start,bb_end,bf_start,bf_end')
     .order('quarter_id');
-  if(error||!data){console.warn('[db] Quarters unavailable');return[];}
-  _quartersCache=data;
-  console.info(`[db] Loaded ${data.length} quarters`);
+  if(error){console.error('[db] loadQuartersFromDB:',error);throw error;}
+  _quartersCache=data||[];
+  _quartersLoaded=true;
+  console.info(`[db] Loaded ${(data||[]).length} quarters`);
   return _quartersCache;
 }
 

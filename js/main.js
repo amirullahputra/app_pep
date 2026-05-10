@@ -193,19 +193,32 @@ function renderTimer(){
 window.renderTimer = renderTimer;
 
 // ── MODAL EVENT LISTENERS ──
-document.getElementById('auth-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuthModal();});
-document.getElementById('dose-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDoseModal();});
+document.getElementById('auth-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuthModal();});
+document.getElementById('dose-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeDoseModal();});
 
 // ── AUTH LISTENER ──
-setupAuthListener();
+try { setupAuthListener(); } catch(e){ console.error('setupAuthListener:',e); }
+
+// ── ERROR BANNER ──
+function showInitError(msg){
+  const root = document.getElementById('panels-root');
+  if(!root) return;
+  root.innerHTML = `<div class="card" style="padding:1.25rem 1.5rem;border-left:4px solid var(--warn);background:var(--warn-bg)">
+    <div style="font-size:14px;font-weight:800;color:var(--warn);margin-bottom:8px">⚠️ Init Error — App tidak bisa load data</div>
+    <div style="font-size:11.5px;color:var(--t1);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;background:var(--bg1);padding:10px;border-radius:6px;border:1px solid var(--bdr)">${msg}</div>
+    <div style="font-size:10.5px;color:var(--t3);margin-top:10px">Buka F12 → Console untuk detail.</div>
+  </div>`;
+}
 
 // ── INIT ──
 (async () => {
-  try { await loadCompoundsFromDB(); } catch(e){ console.error('loadCompounds:',e); }
-  try { window._quarters = await loadQuartersFromDB(); } catch(e){ console.error('loadQuarters:',e); window._quarters=[]; }
+  const errs = [];
+  try { await loadCompoundsFromDB(); } catch(e){ errs.push('loadCompounds: '+(e.message||e)); }
+  try { window._quarters = await loadQuartersFromDB(); } catch(e){ errs.push('loadQuarters: '+(e.message||e)); window._quarters=[]; }
   setInterval(renderTimer,1000);
   renderTimer();
   renderPhaseRow();
   renderNav();
   renderPanels();
+  if(errs.length) showInitError(errs.join('\n'));
 })();
