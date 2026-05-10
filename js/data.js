@@ -196,6 +196,7 @@ export const SHELF_LIFE={
   'HCG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
   'HMG':            {shelf:30,  timing:'Bebas (Bisa disamakan jadwal lain)'},
   'Kisspeptin-10':  {shelf:45,  timing:'Pagi hari'},
+  'Ipamorelin':     {shelf:45,  timing:'Malam (Perut kosong sebelum tidur)'},
   'BPC-157':        {shelf:45,  timing:'Pagi atau setelah latihan beban'},
   'TB-500':         {shelf:45,  timing:'Bebas (Suntik 2x seminggu)'},
   'ARA-290':        {shelf:21,  timing:'Pagi atau sebelum latihan'},
