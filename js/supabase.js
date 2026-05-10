@@ -5,7 +5,7 @@ import { _setPepData } from './data.js';
 import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
-const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1aGhvcXB2d3p6cmx3Z2Z1Z3NiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTg5NTgsImV4cCI6MjA5Mzg5NDk1OH0.KDkDqrsbburSAsaKgNUh2QK5YbFCxqM6aDF-DIqGQaU';
 export const supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
 // ── DYNAMIC PEP DATA LOAD (compounds + phases + redundancy_rules) ──
