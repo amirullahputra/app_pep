@@ -1,6 +1,23 @@
 // ══════════════════════════════════════════════════════════
 // MAIN — entry point
 // ══════════════════════════════════════════════════════════
+
+// Global error catcher
+window.addEventListener('error', e => {
+  const root = document.getElementById('panels-root');
+  if(root) root.innerHTML = `<div style="padding:1.5rem;border:2px solid #EF4444;border-radius:8px;background:#FEE2E2;margin:1rem">
+    <div style="font-size:14px;font-weight:800;color:#991B1B;margin-bottom:8px">🔥 JS Error</div>
+    <div style="font-family:monospace;font-size:11.5px;color:#1A2140;white-space:pre-wrap;background:white;padding:10px;border-radius:6px">${e.message}\n  at ${e.filename||'?'}:${e.lineno||'?'}:${e.colno||'?'}</div>
+  </div>`;
+});
+window.addEventListener('unhandledrejection', e => {
+  const root = document.getElementById('panels-root');
+  if(root) root.innerHTML = `<div style="padding:1.5rem;border:2px solid #EF4444;border-radius:8px;background:#FEE2E2;margin:1rem">
+    <div style="font-size:14px;font-weight:800;color:#991B1B;margin-bottom:8px">🔥 Promise Rejection</div>
+    <div style="font-family:monospace;font-size:11.5px;color:#1A2140;white-space:pre-wrap;background:white;padding:10px;border-radius:6px">${e.reason?.message||e.reason||'unknown'}</div>
+  </div>`;
+});
+
 import { PHASES, COMPOUNDS } from './data.js';
 import { S, pCost, rpM, initBudSel } from './state.js';
 import * as stateModule from './state.js';
