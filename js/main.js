@@ -18,9 +18,9 @@ window.addEventListener('unhandledrejection', e => {
   </div>`;
 });
 
-import { PHASES, COMPOUNDS } from './data.js?v=2';
-import { S, pCost, rpM, initBudSel } from './state.js?v=2';
-import * as stateModule from './state.js?v=2';
+import { PHASES, COMPOUNDS } from './data.js?v=3';
+import { S, pCost, rpM, initBudSel } from './state.js?v=3';
+import * as stateModule from './state.js?v=3';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -30,14 +30,14 @@ import {
   openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
   openAuthModal, closeAuthModal, doLogin, updateAuthUI, onAuthBtnClick,
   setupAuthListener
-} from './supabase.js?v=2';
+} from './supabase.js?v=3';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=2';
-import * as panelFns from './panels.js?v=2';
-import * as supaFns from './supabase.js?v=2';
+} from './panels.js?v=3';
+import * as panelFns from './panels.js?v=3';
+import * as supaFns from './supabase.js?v=3';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData } from './data.js';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js';
 import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';

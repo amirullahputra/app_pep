@@ -19,6 +19,7 @@ import * as stateModule from './state.js';
 // P0 — OVERVIEW
 // ──────────────────────────────────────────
 export function pOverview(){
+  if(!PHASES.length||!COMPOUNDS.length) return `<div class="card" style="padding:2rem;text-align:center;color:var(--t3)">⏳ Memuat data...</div>`;
   const ph=S.ph===0?1:S.ph;
 
   // Tanggal aktual dari W1 = 6 Juli 2026
