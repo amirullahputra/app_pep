@@ -24,7 +24,7 @@ import * as stateModule from './state.js';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
-  loadCompoundsFromDB, loadQuartersFromDB,
+  loadAllPepData, loadQuartersFromDB, saveCompoundEdit,
   openDoseEdit, closeDoseModal, confirmDoseEdit, resetDoseEdit,
   openInvEdit, closeInvModal, confirmInvEdit,
   openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
@@ -43,8 +43,9 @@ import * as supaFns from './supabase.js';
 Object.assign(window, panelFns, supaFns, stateModule);
 
 // ── RENDER PANELS ──
+// New tab order: Overview → Timeline → Decision → Vial → Budget → Compounds
 function renderPanels(){
-  const fns=[pOverview,pDecision,pVial,pTimeline,pBudget,pCompounds];
+  const fns=[pOverview,pTimeline,pDecision,pVial,pBudget,pCompounds];
   document.getElementById('panels-root').innerHTML=`<div class="panel act">${fns[S.tab]()}</div>`;
 }
 window.renderPanels = renderPanels;
@@ -107,9 +108,9 @@ window.renderPhaseRow = renderPhaseRow;
 // ── NAV ──
 const TABS=[
   {ico:'📊',l:'Overview'},
+  {ico:'🗓',l:'Timeline'},
   {ico:'🎯',l:'Decision Matrix'},
   {ico:'📦',l:'Vial Planner'},
-  {ico:'🗓',l:'Timeline'},
   {ico:'💰',l:'Budget + Conflict'},
   {ico:'🧬',l:'Compounds'},
 ];
@@ -212,6 +213,7 @@ window.renderTimer = renderTimer;
 // ── MODAL EVENT LISTENERS ──
 document.getElementById('auth-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuthModal();});
 document.getElementById('dose-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeDoseModal();});
+document.getElementById('cmp-edit-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeCmpEdit();});
 
 // ── AUTH LISTENER ──
 try { setupAuthListener(); } catch(e){ console.error('setupAuthListener:',e); }
@@ -230,7 +232,7 @@ function showInitError(msg){
 // ── INIT ──
 (async () => {
   const errs = [];
-  try { await loadCompoundsFromDB(); } catch(e){ errs.push('loadCompounds: '+(e.message||e)); }
+  try { await loadAllPepData(); } catch(e){ errs.push('loadAllPepData: '+(e.message||e)); }
   try { window._quarters = await loadQuartersFromDB(); } catch(e){ errs.push('loadQuarters: '+(e.message||e)); window._quarters=[]; }
   setInterval(renderTimer,1000);
   renderTimer();

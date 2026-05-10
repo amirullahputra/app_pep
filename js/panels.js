@@ -10,7 +10,7 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested
 } from './state.js';
-import { saveBudgetToDB } from './supabase.js';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
 import * as stateModule from './state.js';
@@ -932,6 +932,7 @@ export function pCompounds(){
     <input class="srch" placeholder="Cari compound..." value="${S.search}" oninput="S.search=this.value;renderPanels()">
   </div>`;
 
+  const isAdmin=S.user?.role==='service_role'||S.isAdmin;
   const cards=filtered.map(c=>{
     const sc=SC[c.name]||{},sp=SP[c.name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
     const f1=sc.f1||{r:0,p:0},f2=sc.f2||{r:0,p:0},f3=sc.f3||{r:0,p:0};
@@ -940,9 +941,10 @@ export function pCompounds(){
     return`<div class="cmp-card">
       <div class="cmp-hdr">
         <div><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span><div class="cmp-name">${c.name}</div></div>
-        <div style="text-align:right">
+        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
           <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--acc)">★${ss}</div>
           <div style="font-size:9px;color:var(--t2)">sport</div>
+          <button onclick="openCmpEdit('${c.name.replace(/'/g,"\\'")}');event.stopPropagation()" style="font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t1);cursor:pointer">✏️ Edit</button>
         </div>
       </div>
       <div class="cmp-body">
@@ -968,3 +970,88 @@ export function pCompounds(){
 
   return`${sportSummary}${filterBar}<div class="cmp-grid">${cards}</div>`;
 }
+
+// ── COMPOUND EDIT MODAL ──
+window.openCmpEdit = function(name){
+  const c=COMPOUNDS.find(x=>x.name===name);
+  const sp=SP[name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
+  const vs=VSPECS[name]||{unit:'mg',vSize:10,vPrice:0,label:''};
+  const sl=SHELF_LIFE[name]||{shelf:0,timing:''};
+  if(!c)return;
+  S._editCmpName=name;
+  document.getElementById('cmp-edit-title').textContent='Edit: '+name;
+  document.getElementById('ce-name').value=name;
+  document.getElementById('ce-cat').value=c.cat||'off';
+  document.getElementById('ce-mechanism').value=MECHS[name]||'';
+  document.getElementById('ce-z2').value=sp.z2||0;
+  document.getElementById('ce-pw').value=sp.pw||0;
+  document.getElementById('ce-rc').value=sp.rc||0;
+  document.getElementById('ce-hr').value=sp.hr||0;
+  document.getElementById('ce-cn').value=sp.cn||0;
+  document.getElementById('ce-risk').value=sp.risk||'';
+  document.getElementById('ce-unit').value=vs.unit||'mg';
+  document.getElementById('ce-vsize').value=vs.vSize||10;
+  document.getElementById('ce-vprice').value=vs.vPrice||0;
+  document.getElementById('ce-vlabel').value=vs.label||'';
+  document.getElementById('ce-shelf').value=sl.shelf||0;
+  document.getElementById('ce-timing').value=sl.timing||'';
+  document.getElementById('cmp-edit-err').textContent='';
+
+  // Build doses grid (W1–W56)
+  const doses=c.d||{};
+  const grid=document.getElementById('ce-doses-table');
+  grid.innerHTML='';
+  for(let w=1;w<=56;w++){
+    const label=document.createElement('label');
+    label.style.cssText='font-size:9px;color:var(--t2);display:flex;flex-direction:column;gap:2px';
+    label.innerHTML=`W${w}<input type="number" min="0" step="0.1" data-week="${w}" value="${doses[w]||doses[String(w)]||''}" style="padding:4px;border-radius:4px;border:1px solid var(--bdr);background:var(--bg1);color:var(--t1);font-size:10px;width:100%;box-sizing:border-box">`;
+    grid.appendChild(label);
+  }
+  document.getElementById('cmp-edit-modal').classList.add('open');
+};
+
+window.closeCmpEdit = function(){
+  document.getElementById('cmp-edit-modal').classList.remove('open');
+};
+
+window.saveCmpEdit = async function(){
+  const name=S._editCmpName;
+  if(!name)return;
+  const errEl=document.getElementById('cmp-edit-err');
+  errEl.textContent='Menyimpan...';
+
+  // Build doses_jsonb from inputs
+  const dosesInputs=document.querySelectorAll('#ce-doses-table input[data-week]');
+  const doses_jsonb={};
+  dosesInputs.forEach(inp=>{
+    const v=parseFloat(inp.value);
+    if(!isNaN(v)&&v>0) doses_jsonb[inp.dataset.week]=v;
+  });
+
+  const updates={
+    category: document.getElementById('ce-cat').value,
+    mechanism: document.getElementById('ce-mechanism').value.trim()||null,
+    sport_z2: parseInt(document.getElementById('ce-z2').value)||0,
+    sport_pw: parseInt(document.getElementById('ce-pw').value)||0,
+    sport_rc: parseInt(document.getElementById('ce-rc').value)||0,
+    sport_hr: parseInt(document.getElementById('ce-hr').value)||0,
+    sport_cn: parseInt(document.getElementById('ce-cn').value)||0,
+    risk_text: document.getElementById('ce-risk').value.trim()||null,
+    vial_unit: document.getElementById('ce-unit').value,
+    vial_size: parseFloat(document.getElementById('ce-vsize').value)||10,
+    vial_price_idr: parseInt(document.getElementById('ce-vprice').value)||0,
+    vial_label: document.getElementById('ce-vlabel').value.trim()||null,
+    shelf_life_days: parseInt(document.getElementById('ce-shelf').value)||null,
+    timing_note: document.getElementById('ce-timing').value.trim()||null,
+    doses_jsonb,
+  };
+
+  try{
+    await saveCompoundEdit(name, updates);
+    await loadAllPepData();
+    closeCmpEdit();
+    renderPanels();
+  }catch(e){
+    errEl.textContent='Error: '+(e.message||e);
+  }
+};
