@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=11';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=12';
 
 export let S={
   ph:1, tab:0,

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=11';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=12';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, pCost, totCost, totVials,
@@ -9,11 +9,11 @@ import {
   customDoses, inventoryCache, reconCache, getDose, isCustomDose,
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested
-} from './state.js?v=11';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=11';
+} from './state.js?v=12';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=12';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=11';
+import * as stateModule from './state.js?v=12';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -713,11 +713,44 @@ export function pBudget(){
   const cap=S.budCap;
   const phCol={1:'var(--f1)',2:'var(--f2)',3:'var(--f3)'};
 
+  // Filter by Decision Matrix selection untuk fase ini.
+  // Source of truth: hanya compound yang sudah dipilih di Decision Matrix
+  // yang muncul di Budget tab.
+  const dmSelected = DM.selectedByPhase[ph] || new Set();
+
+  // Empty state: DM Fase X belum punya selection
+  if(dmSelected.size === 0){
+    return `
+    <div class="card">
+      <div class="card-title"><span class="ico">💰</span> Budget + Conflict — Fase ${ph}</div>
+      <div class="ph-toggle-row" style="margin-bottom:16px">
+        <span style="font-size:10px;color:var(--t2);font-weight:700">Fase:</span>
+        ${PHASES.map(p=>`<button class="ph-tgl${S.budPh===p.id?' t'+p.cls:''}" onclick="switchBudPhase(${p.id})">${p.name}</button>`).join('')}
+      </div>
+      <div style="padding:2rem;text-align:center;color:var(--t3);font-size:13px;line-height:1.6">
+        <div style="font-size:32px;margin-bottom:8px">🎯</div>
+        <div>Belum ada compound dipilih untuk <b>Fase ${ph}</b> di Decision Matrix.</div>
+        <div style="margin-top:8px;font-size:11px">Pilih compound di Decision Matrix dulu, baru bisa hitung budget.</div>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(2)">Buka Decision Matrix →</button>
+      </div>
+    </div>`;
+  }
+
   const sorted=[...COMPOUNDS]
+    .filter(c=>dmSelected.has(c.name))
     .map(c=>({...c,prio:getPrio(c.name,ph),cost:c.c[phKey]?.cost||0,eff:budEff(c.name,ph),ss:sportScore(c.name)}))
-    .filter(c=>c.cost>0).sort((a,b)=>b.prio-a.prio);
+    .sort((a,b)=>b.prio-a.prio);
+
+  // Auto-prune S.budSel ke subset dari DM-selected (hapus phantom dari fase lain)
+  const visibleNames = new Set(sorted.map(c=>c.name));
+  [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
+  // Kalau S.budSel kosong setelah prune, auto-fill semua DM-selected (default: all checked)
+  if(S.budSel.size === 0){
+    sorted.forEach(c => S.budSel.add(c.name));
+  }
 
   const selCost=sorted.filter(c=>S.budSel.has(c.name)).reduce((a,c)=>a+c.cost,0);
+  const selCount=sorted.filter(c=>S.budSel.has(c.name)).length;
   const selPct=Math.min(100,Math.round(selCost/cap*100));
   const over=selCost>cap;
   let sugCost=0,suggested=[];
@@ -727,7 +760,7 @@ export function pBudget(){
 
   const cBanner=actConf.length>0
     ?`<div class="conflict-banner cb-warn"><div class="cb-ico">⚠️</div><div><div class="cb-title">${actConf.length} KONFLIK AKTIF dalam seleksi lo!</div><div class="cb-list">${actConf.map(r=>`• ${r.lvl} — ${r.title}`).join('<br>')}</div><div style="font-size:10px;color:var(--t2);margin-top:4px">Scroll ke Live Monitor →</div></div></div>`
-    :`<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">Seleksi ${S.budSel.size} compounds saat ini aman dari conflict rules.</div></div></div>`;
+    :`<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">Seleksi ${selCount} compounds saat ini aman dari conflict rules.</div></div></div>`;
 
   const cmpRows=sorted.map(c=>{
     const sel=S.budSel.has(c.name),conf=actConf.some(r=>r.active.includes(c.name));
@@ -777,7 +810,7 @@ export function pBudget(){
 
   <div class="bud-progress">
     <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:${phCol[ph]}">${rpM(selCost)}</span> · ${S.budSel.size} compounds</span>
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:${phCol[ph]}">${rpM(selCost)}</span> · ${selCount} compounds</span>
       <span style="font-size:12px;font-weight:700;color:var(--t1)">Sisa: <span style="color:${over?'var(--warn)':'var(--f3)'}">${over?'OVER BUDGET':rpM(cap-selCost)}</span></span>
     </div>
     <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':phCol[ph]}"></div></div>
