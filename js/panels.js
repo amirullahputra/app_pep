@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=24';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=25';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=24';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=24';
+} from './state.js?v=25';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=25';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=24';
+import * as stateModule from './state.js?v=25';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -784,8 +784,9 @@ export function pTimeline(){
 // P4 — BUDGET + CONFLICT
 // ──────────────────────────────────────────
 export function pBudget(){
-  // Pakai S.quarter global (quarter row card di atas) — TIDAK ada quarter chip lagi
+  // Pakai S.quarter global — TIDAK ada quarter chip
   const qid = S.quarter;
+  const cap = S.budCap;
   const qLabel = quarterLabel(qid);
   const dmSelected = DM.selectedByQuarter[qid] || new Set();
 
@@ -803,7 +804,7 @@ export function pBudget(){
     </div>`;
   }
 
-  // Compound list dari DM — read-only, sorted by efficiency_score DESC
+  // Compound list dari DM — sorted by efficiency_score DESC
   const sorted = [...COMPOUNDS]
     .filter(c => dmSelected.has(c.name))
     .map(c => {
@@ -819,20 +820,46 @@ export function pBudget(){
     })
     .sort((a,b) => b.eff - a.eff);
 
-  const totalCost = sorted.reduce((a,c) => a + c.cost, 0);
-  const totalVials = sorted.reduce((a,c) => a + c.vials, 0);
+  // Auto-prune S.budSel ke subset DM-selected (kalau ada phantom dari quarter lain)
+  const visibleNames = new Set(sorted.map(c => c.name));
+  [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
+  // Default: kalau S.budSel kosong setelah prune, auto-check all DM-selected
+  if(S.budSel.size === 0){
+    sorted.forEach(c => S.budSel.add(c.name));
+  }
 
-  // Conflict detection (now reads from DM via getConflicts updated)
+  // Budget math (cuma compound yang di-check)
+  const selCost = sorted.filter(c => S.budSel.has(c.name)).reduce((a,c) => a + c.cost, 0);
+  const selCount = sorted.filter(c => S.budSel.has(c.name)).length;
+  const selPct = cap > 0 ? Math.min(100, Math.round(selCost / cap * 100)) : 0;
+  const over = selCost > cap;
+
+  // Auto-pick suggestion: greedy by efficiency_score sampai budget cap habis
+  let sugCost = 0;
+  const suggested = [];
+  sorted.forEach(c => {
+    if(sugCost + c.cost <= cap){
+      sugCost += c.cost;
+      suggested.push(c.name);
+    }
+  });
+  stateModule._lastSuggested.length = 0;
+  suggested.forEach(n => stateModule._lastSuggested.push(n));
+
+  // Conflict detection dari DM (via getConflicts() yg sudah updated)
   const conflicts = getConflicts();
   const actConf = conflicts.filter(r => r.triggered);
 
   const cBanner = actConf.length > 0
     ? `<div class="conflict-banner cb-warn"><div class="cb-ico">⚠️</div><div><div class="cb-title">${actConf.length} KONFLIK AKTIF dari DM selection!</div><div class="cb-list">${actConf.map(r=>`• ${r.lvl} — ${r.title}`).join('<br>')}</div><div style="font-size:10px;color:var(--t2);margin-top:4px">Scroll ke Live Monitor →</div></div></div>`
-    : `<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">${dmSelected.size} compound dari DM aman dari conflict rules.</div></div></div>`;
+    : `<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">${dmSelected.size} compound DM aman dari conflict rules.</div></div></div>`;
 
+  // Compound rows — dengan checkbox toggle (S.budSel)
   const cmpRows = sorted.map(c => {
+    const sel = S.budSel.has(c.name);
     const conf = actConf.some(r => r.active.includes(c.name));
-    return `<div class="bopt-row${conf?' in-conflict':''}" style="cursor:default">
+    return `<div class="bopt-row${conf?' in-conflict':''}">
+      <div class="chk${sel?' on':''}" onclick="toggleBudSel('${c.name}')"></div>
       <div class="bopt-info">
         <div class="bopt-name" style="${conf?'color:var(--warn)':''}">${c.name}${conf?' ⚠':''}</div>
         <div class="bopt-sub">
@@ -857,16 +884,36 @@ export function pBudget(){
   return `
   ${cBanner}
 
+  <div class="bud-controls" style="margin-top:14px">
+    <div class="bud-val-row">
+      <div class="bud-val" id="budDisp">${rpM(cap)}</div>
+      <div class="bud-lbl">budget cap</div>
+      <button class="auto-btn" onclick="autoPickBudget()" style="margin-left:auto">✨ Auto Pilih Optimal</button>
+    </div>
+    <input type="range" min="5000000" max="200000000" step="5000000" value="${cap}"
+      oninput="S.budCap=+this.value;document.getElementById('budDisp').textContent='Rp '+Math.round(+this.value).toLocaleString('id-ID');saveBudgetToDB();renderPanels()">
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px">
+      <span>Rp 5 jt</span><span>Rp 200 jt</span>
+    </div>
+  </div>
+
+  <div class="bud-progress" style="margin-top:10px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:var(--acc)">${rpM(selCost)}</span> · ${selCount}/${dmSelected.size} compound</span>
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Sisa: <span style="color:${over?'var(--warn)':'var(--f3)'}">${over?'OVER BUDGET':rpM(cap-selCost)}</span></span>
+    </div>
+    <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':'var(--acc)'}"></div></div>
+    <div style="font-size:10px;color:var(--t2);margin-top:3px">${selPct}% dari cap · ${qLabel}</div>
+  </div>
+
   <div class="grid2" style="margin-top:14px">
     <div class="card">
       <div class="card-title">
-        <span class="ico">💰</span> Budget — ${qLabel}
-        <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">
-          Total: <span style="color:var(--acc);font-family:'JetBrains Mono',monospace">${rpM(totalCost)}</span> · ${totalVials} vial
-        </span>
+        <span class="ico">💰</span> Filter Budget — ${qLabel}
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">${selCount} terpilih · ${rpM(selCost)}</span>
       </div>
       ${cmpRows}
-      <div class="note">List dari Decision Matrix · sorted by Efficiency Score · read-only (edit selection di DM tab).</div>
+      <div class="note">Centang untuk include/exclude. Compound source dari DM. Auto Pilih = greedy by Efficiency Score sampai budget cap habis.</div>
     </div>
     <div>
       <div class="card" style="margin-bottom:10px">

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=24';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=25';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
