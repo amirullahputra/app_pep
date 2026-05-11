@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=14';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=15';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,11 +10,11 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
-} from './state.js?v=14';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=14';
+} from './state.js?v=15';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=15';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=14';
+import * as stateModule from './state.js?v=15';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -857,83 +857,122 @@ export function pBudget(){
 }
 
 // ──────────────────────────────────────────
-// P5 — COMPOUNDS
+// P5 — COMPOUNDS (List View Horizontal — tagged static/dynamic)
+// Visi: lihat SEMUA field master library jelas. Tagged [S]/[D] supaya
+// user tau prioritas update. Edit lewat existing cmp-edit-modal.
 // ──────────────────────────────────────────
 export function pCompounds(){
   const qid = S.quarter || QUARTERS[0];
-  const allDims={z2:0,pw:0,rc:0,hr:0,cn:0};
-  COMPOUNDS.forEach(c=>{const s=SP[c.name];if(s)Object.keys(allDims).forEach(k=>allDims[k]+=s[k])});
-  const maxD=Math.max(...Object.values(allDims));
 
-  const sportSummary=`<div class="card" style="margin-bottom:12px">
-    <div class="card-title"><span class="ico">🏋️</span> Sport Profile Architecture — Hybrid Power-Based Athlete</div>
-    <div class="sport-grid">
-      ${[['z2','🚴','Zone 2','Endurance synergy'],['pw','⚡','Power','Output support'],['rc','🔄','Recovery','Rate accel'],['hr','🧬','Hormonal','Axis protection'],['cn','🧠','CNS','Clarity deficit']].map(([k,ico,n,sub])=>{
-        const v=allDims[k],pct=Math.round(v/maxD*100);
-        const top=[...COMPOUNDS].sort((a,b)=>(SP[b.name]?.[k]||0)-(SP[a.name]?.[k]||0)).slice(0,3).map(c=>c.name);
-        return`<div class="sp-card">
-          <div class="sp-ico">${ico}</div>
-          <div class="sp-name">${n}</div>
-          <div class="sp-sub">${sub}</div>
-          <div class="sp-val">${v}</div>
-          <div class="sp-bar"><div class="sp-bar-fill" style="width:${pct}%"></div></div>
-          <div class="sp-top">${top.join(' · ')}</div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="note">Score = sum semua compound di protokol. Critical path lo: Zone 2 + Power = SS-31, MOTS-c, SLU-PP-332, Ipamorelin, IGF-1 LR3.</div>
-  </div>`;
+  // Filter logic — tetap pakai existing S.filterCats + S.search
+  const filtered = [...COMPOUNDS]
+    .filter(c => S.filterCats.has(c.cat) && (!S.search || c.name.toLowerCase().includes(S.search.toLowerCase())))
+    .sort((a,b) => a.name.localeCompare(b.name));
 
-  const filtered=[...COMPOUNDS]
-    .filter(c=>S.filterCats.has(c.cat)&&(!S.search||c.name.toLowerCase().includes(S.search.toLowerCase())))
-    .sort((a,b)=>sportScore(b.name)-sportScore(a.name));
-
-  const filterBar=`<div class="filter-bar">
+  const filterBar = `<div class="filter-bar" style="margin-bottom:.75rem">
     <span class="fl">Layer:</span>
-    ${Object.entries(CAT).map(([k,v])=>`
-    <div class="fp${S.filterCats.has(k)?' act':''}" onclick="toggleCat('${k}')">
-      <div class="dot" style="background:${v.col}"></div>${v.n}
-    </div>`).join('')}
+    ${Object.entries(CAT).map(([k,v]) => `
+      <div class="fp${S.filterCats.has(k)?' act':''}" onclick="toggleCat('${k}')">
+        <div class="dot" style="background:${v.col}"></div>${v.n}
+      </div>`).join('')}
     <input class="srch" placeholder="Cari compound..." value="${S.search}" oninput="S.search=this.value;renderPanels()">
+    <span style="margin-left:auto;font-size:11px;color:var(--t2);font-weight:700">${filtered.length}/${COMPOUNDS.length} compounds</span>
   </div>`;
 
-  const isAdmin=S.user?.role==='service_role'||S.isAdmin;
-  const cards=filtered.map(c=>{
-    const sc=SC[c.name]||{},sp=SP[c.name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
-    const f1=sc.f1||{r:0,p:0},f2=sc.f2||{r:0,p:0},f3=sc.f3||{r:0,p:0};
-    const ss=sportScore(c.name),eff=budEff(c.name,qid),cost=costForQuarter(c.name,qid).cost;
-    const pips=(v)=>Array.from({length:5},(_,i)=>`<div class="pip ${i<v?'pip-on':'pip-off'}"></div>`).join('');
-    return`<div class="cmp-card">
-      <div class="cmp-hdr">
-        <div><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span><div class="cmp-name">${c.name}</div></div>
-        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--acc)">★${ss}</div>
-          <div style="font-size:9px;color:var(--t2)">sport</div>
-          <button onclick="openCmpEdit('${c.name.replace(/'/g,"\\'")}');event.stopPropagation()" style="font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t1);cursor:pointer">✏️ Edit</button>
-        </div>
-      </div>
-      <div class="cmp-body">
-        <div class="cmp-scores">
-          ${[1,2,3].map(p=>{const s=(p===1?f1:p===2?f2:f3);return`<div class="cmp-sc"><div class="cmp-sc-lbl">Prio F${p}</div><div class="cmp-sc-v" style="color:${scCol(s.p)}">${s.p}</div></div>`;}).join('')}
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2);margin-bottom:.5rem">
-          <span>${quarterLabel(qid)}: <strong style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${cost>0?rpM(cost):'—'}</strong></span>
-          <span>Eff: <strong style="color:${eff>=10?'var(--f3)':eff>=5?'var(--f2)':'var(--t3)'}">${eff>0?eff+'x':'—'}</strong></span>
-          <span>Harga/vial: <strong style="font-family:'JetBrains Mono',monospace">${rp(VSPECS[c.name]?.vPrice||0)}</strong></span>
-        </div>
-        ${[['z2','🚴 Zone 2'],['pw','⚡ Power'],['rc','🔄 Recovery'],['hr','🧬 Hormonal'],['cn','🧠 CNS']].map(([k,lbl])=>`
-        <div class="cmp-sport-row">
-          <div class="cmp-sl">${lbl}</div>
-          <div class="pips">${pips(sp[k])}</div>
-          <span style="font-size:9px;color:var(--t2);margin-left:5px">${sp[k]}/5</span>
-        </div>`).join('')}
-        <div class="cmp-mech">${MECHS[c.name]||''}</div>
-        ${sp.risk?`<div style="margin-top:.5rem"><span class="tag tag-warn">⚠ ${sp.risk}</span></div>`:''}
-      </div>
-    </div>`;
+  // Legend
+  const legend = `<div class="cmp-legend">
+    <span class="cmp-tag cmp-tag-S">S</span> Static (master, jarang berubah)
+    <span class="cmp-tag cmp-tag-D" style="margin-left:10px">D</span> Dynamic (sering update via app)
+    <span style="margin-left:14px;font-size:10px;color:var(--t3)">⚠ Score F1/F2/F3 legacy phase-based — quarter rework next session</span>
+  </div>`;
+
+  // Render mini sport profile (5 dots colored by score 0-5)
+  const sportDots = (sp) => {
+    return ['z2','pw','rc','hr','cn'].map(k => {
+      const v = sp[k] || 0;
+      const tooltip = `${k.toUpperCase()}: ${v}/5`;
+      return `<span class="sp-dot sp-${v}" title="${tooltip}"></span>`;
+    }).join('');
+  };
+
+  // Render rows
+  const rows = filtered.map(c => {
+    const sp = SP[c.name] || {z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
+    const sc = SC[c.name] || {};
+    const vspec = VSPECS[c.name] || {};
+    const shelf = SHELF_LIFE[c.name] || {};
+    const f1 = sc.f1?.p || 0, f2 = sc.f2?.p || 0, f3 = sc.f3?.p || 0;
+    const doseCount = c.d ? Object.keys(c.d).length : 0;
+    const mech = MECHS[c.name] || '';
+    const mechTrunc = mech.length > 60 ? mech.slice(0,57)+'…' : mech;
+    const notes = c.notes || '';
+    const notesTrunc = notes.length > 40 ? notes.slice(0,37)+'…' : notes;
+    const escName = c.name.replace(/'/g,"\\'");
+
+    return `<tr>
+      <td class="cmp-tbl-sticky">
+        <div style="font-weight:800;font-size:12px;color:var(--t0)">${c.name}</div>
+      </td>
+      <td><span class="lb ${CAT[c.cat]?.cls||''}">${CAT[c.cat]?.n||c.cat||'—'}</span></td>
+      <td class="ellipsis-cell" title="${mech.replace(/"/g,'&quot;')}">${mechTrunc||'—'}</td>
+      <td><div class="sport-dots-row">${sportDots(sp)}</div></td>
+      <td class="ellipsis-cell" title="${(sp.risk||'').replace(/"/g,'&quot;')}">${sp.risk||'—'}</td>
+      <td class="cmp-score-cell"><span style="color:${scCol(f1)}">${f1}</span>/<span style="color:${scCol(f2)}">${f2}</span>/<span style="color:${scCol(f3)}">${f3}</span></td>
+      <td class="ellipsis-cell" title="${(c.hiv_notes||'').replace(/"/g,'&quot;')}">${c.hiv_notes||'—'}</td>
+      <td>${shelf.shelf?shelf.shelf+'d':'—'}</td>
+      <td class="ellipsis-cell" title="${notes.replace(/"/g,'&quot;')}">${notesTrunc||'—'}</td>
+      <td>${vspec.unit||'—'}</td>
+      <td class="dyn-cell">${vspec.vSize||'—'}</td>
+      <td class="dyn-cell">${vspec.vPrice>0?rpM(vspec.vPrice):'—'}</td>
+      <td class="dyn-cell ellipsis-cell" title="${(vspec.label||'').replace(/"/g,'&quot;')}">${vspec.label||'—'}</td>
+      <td class="dyn-cell ellipsis-cell" title="${(shelf.timing||'').replace(/"/g,'&quot;')}">${shelf.timing||'—'}</td>
+      <td class="dyn-cell">${doseCount>0?`<span style="color:var(--f3);font-weight:700">${doseCount}w</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+      <td><button class="cmp-edit-btn" onclick="openCmpEdit('${escName}')">✏️ Edit</button></td>
+    </tr>`;
   }).join('');
 
-  return`${sportSummary}${filterBar}<div class="cmp-grid">${cards}</div>`;
+  // Table header dengan tag visual per kolom
+  const header = `
+    <thead>
+      <tr class="cmp-tbl-grp-row">
+        <th class="cmp-tbl-sticky cmp-grp-id" colspan="2">🔵 IDENTITY</th>
+        <th class="cmp-grp-static" colspan="7">🟢 STATIC — master data</th>
+        <th class="cmp-grp-dynamic" colspan="6">🟠 DYNAMIC — frequently update</th>
+        <th class="cmp-grp-action">⚙️</th>
+      </tr>
+      <tr class="cmp-tbl-hdr-row">
+        <th class="cmp-tbl-sticky">Name <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Cat <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Mechanism <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Sport (Z2/PW/RC/HR/CN) <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Risk <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>F1/F2/F3 ⚠</th>
+        <th>HIV <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Shelf <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Notes <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Unit <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Size <span class="cmp-tag cmp-tag-D">D</span></th>
+        <th>Price <span class="cmp-tag cmp-tag-D">D</span></th>
+        <th>Label <span class="cmp-tag cmp-tag-D">D</span></th>
+        <th>Timing <span class="cmp-tag cmp-tag-D">D</span></th>
+        <th>Doses <span class="cmp-tag cmp-tag-D">D</span></th>
+        <th>Action</th>
+      </tr>
+    </thead>`;
+
+  const tableHtml = `
+    <div class="cmp-tbl-wrap">
+      <table class="cmp-tbl">
+        ${header}
+        <tbody>${rows||'<tr><td colspan="16" style="text-align:center;padding:2rem;color:var(--t3)">Tidak ada compound match filter</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="cmp-info-footer">
+      <strong>📊 Schema Audit</strong>: ${COMPOUNDS.length} compounds · 15 USED fields shown · 28 LEGACY columns di DB tidak dirender (next session cleanup).
+      <br><span style="color:var(--t3);font-size:10px">Hover cell untuk detail lengkap. Klik Edit untuk modal full (semua field editable).</span>
+    </div>`;
+
+  return `${filterBar}${legend}${tableHtml}`;
 }
 
 // ── COMPOUND EDIT MODAL ──
