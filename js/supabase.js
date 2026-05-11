@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=20';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus } from './state.js?v=20';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=21';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus } from './state.js?v=21';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -267,7 +267,7 @@ export function openDoseEdit(compoundName,week){
   // Fallback ke c.d[week] (legacy doses_jsonb) kalau ada.
   let defaultDose = c?.d?.[week] || 0;
   if(!defaultDose && c){
-    const status = tlCellStatus(week, c);
+    const status = tlCellStatus(week, c, S.quarter);
     if(status === 'on'){
       const wt = parseWeeklyTotal(c.weekly_total);
       defaultDose = wt?.value || 0;

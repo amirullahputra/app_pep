@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=20';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=21';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -286,31 +286,51 @@ export function parseWeeklyTotal(text){
   return {raw:text};
 }
 
-// Auto-derive start week dari quarter paling awal compound dipilih di DM.
-// Kalau gak ada di DM manapun, fallback W1.
-export function tlAutoStartWeek(compoundName){
-  for(const qid of QUARTERS){
-    if(DM.selectedByQuarter[qid]?.has(compoundName)){
-      const wks = weeksInQuarter(qid);
-      if(wks.length > 0) return wks[0];
-    }
-  }
-  return 1;
+// Timeline state — per (quarter, compound) cycle config, in-memory (Phase B persist later)
+// Key format: `${qid}|${compoundName}` → { on: int weeks, off: int weeks }
+export const TL = {
+  cycles: {}
+};
+
+export function tlGetCycle(qid, name){
+  return TL.cycles[`${qid}|${name}`] || {on: 0, off: 0};
 }
 
-// Hitung status sel di Timeline grid (compound × week) — auto dari on_cycle/off_cycle
-// + start week dari DM. Return: 'on' | 'off' | 'inactive'
-export function tlCellStatus(week, compound){
-  if(!compound) return 'inactive';
-  const onP = parseCycleText(compound.on_cycle);
-  if(onP.type === 'continuous') return 'on';
-  if(onP.type === 'prn' || onP.type === 'goal' || onP.type === 'bundle_ref' || onP.type === 'unknown' || onP.type === 'custom') return 'inactive';
-  if(onP.type !== 'weeks') return 'inactive';
-  const startWeek = tlAutoStartWeek(compound.name);
-  const offP = parseCycleText(compound.off_cycle);
-  const onLen = onP.max;
-  const offLen = (offP.type === 'weeks') ? offP.max : (offP.type === 'none' ? 0 : 4);
-  const delta = week - startWeek;
+export function tlSetCycle(qid, name, field, value){
+  const key = `${qid}|${name}`;
+  if(!TL.cycles[key]) TL.cycles[key] = {on: 0, off: 0};
+  const v = parseInt(value);
+  TL.cycles[key][field] = isNaN(v) ? 0 : Math.max(0, v);
+}
+
+// Seed defaults dari master compound (parsed dari on_cycle/off_cycle CSV)
+export function tlSeedFromMaster(qid, name){
+  const c = COMPOUNDS.find(x => x.name === name);
+  if(!c) return;
+  const onP = parseCycleText(c.on_cycle);
+  const offP = parseCycleText(c.off_cycle);
+  const on = onP.type === 'weeks' ? onP.max
+           : onP.type === 'continuous' ? 99
+           : 0;
+  const off = offP.type === 'weeks' ? offP.max
+            : offP.type === 'none' ? 0
+            : 0;
+  TL.cycles[`${qid}|${name}`] = {on, off};
+}
+
+// Hitung status sel di Timeline grid — per quarter
+// Return: 'on' | 'off' | 'inactive'
+export function tlCellStatus(week, compound, qid){
+  if(!compound || !qid) return 'inactive';
+  const weeksInQ = weeksInQuarter(qid);
+  if(!weeksInQ.includes(week)) return 'inactive';
+  const cycle = tlGetCycle(qid, compound.name);
+  const onLen = cycle.on || 0;
+  const offLen = cycle.off || 0;
+  if(onLen === 0) return 'inactive';
+  if(onLen >= 99) return 'on';  // continuous sentinel
+  const qStartW = weeksInQ[0];
+  const delta = week - qStartW;
   if(delta < 0) return 'inactive';
   if(offLen === 0) return 'on';
   const cycleLen = onLen + offLen;
@@ -318,23 +338,23 @@ export function tlCellStatus(week, compound){
 }
 
 // Hitung dose untuk week tertentu: custom > auto (weekly_total kalau ON) > 0
-export function tlDoseForWeek(week, compound){
+export function tlDoseForWeek(week, compound, qid){
   if(!compound) return 0;
   const custom = customDoses[compound.name]?.[week];
   if(custom !== undefined) return custom;
-  const status = tlCellStatus(week, compound);
+  const status = tlCellStatus(week, compound, qid);
   if(status !== 'on') return 0;
   const wt = parseWeeklyTotal(compound.weekly_total);
   return wt?.value || 0;
 }
 
-// Vial summary per compound — total dose + vial needs
-export function tlVialSummary(compound, weeks){
+// Vial summary per compound — total dose + vial needs (scoped to quarter weeks)
+export function tlVialSummary(compound, weeks, qid){
   if(!compound) return {totalDose:0, vials:0, unit:'mg', dosedWeeks:0};
   let totalDose = 0;
   let dosedWeeks = 0;
   weeks.forEach(w => {
-    const d = tlDoseForWeek(w, compound);
+    const d = tlDoseForWeek(w, compound, qid);
     if(d > 0){ totalDose += d; dosedWeeks++; }
   });
   const vs = VSPECS[compound.name];
