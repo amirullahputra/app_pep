@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=19';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=20';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,12 +10,12 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
-  TL, parseCycleText, parseWeeklyTotal, tlCellStatus
-} from './state.js?v=19';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=19';
+  parseCycleText, parseWeeklyTotal, tlCellStatus, tlAutoStartWeek, tlDoseForWeek, tlVialSummary
+} from './state.js?v=20';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=20';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=19';
+import * as stateModule from './state.js?v=20';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -678,7 +678,7 @@ export function pTimeline(){
 
   if(yCompounds.length === 0){
     return `<div class="card">
-      <div class="card-title"><span class="ico">🗓</span> Timeline — Run Cycle Preview</div>
+      <div class="card-title"><span class="ico">🗓</span> Timeline — Per-Week Dose & Vial Plan</div>
       <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.7">
         <div style="font-size:36px;margin-bottom:10px">📋</div>
         <div>Pilih compound di <b>Decision Matrix</b> dulu — Y axis akan otomatis populated dari union semua quarter.</div>
@@ -687,7 +687,7 @@ export function pTimeline(){
     </div>`;
   }
 
-  // Quarter bands header (groupkonsekutif weeks dgn same quarter)
+  // Quarter bands header
   const qSegs = [];
   weeks.forEach(w => {
     const qid = quarterFromWeek(w);
@@ -700,65 +700,87 @@ export function pTimeline(){
     `<div class="tl-q-seg" style="flex:${q.e-q.s+1}">${quarterLabel(q.qid)}</div>`
   ).join('')}</div>`;
 
-  // Week number row (label setiap kelipatan 4)
   const wkRow = `<div class="tl-wk-row">${weeks.map(w =>
     `<div class="tl-wk">${w%4===0?'W'+w:''}</div>`
   ).join('')}</div>`;
+
+  // Grand summary across all compounds
+  let grandTotalVials = 0;
+  let grandTotalCost = 0;
 
   // Y rows
   const rows = yCompounds.map(c => {
     const onP = parseCycleText(c.on_cycle);
     const isContinuous = onP.type === 'continuous';
     const isSpecial = ['prn','goal','bundle_ref','taper','custom','unknown'].includes(onP.type);
-    const run = TL.cycleRuns[c.name];
-    const startVal = run?.startWeek || 1;
+    const startW = tlAutoStartWeek(c.name);
     const wt = parseWeeklyTotal(c.weekly_total);
     const wtLabel = wt?.value ? `${wt.value}${wt.unit}/wk` : (c.weekly_total || '—');
-    const safeName = c.name.replace(/[^a-zA-Z0-9]/g,'_');
     const escName = c.name.replace(/'/g,"\\'");
 
     const cells = weeks.map(w => {
       const status = tlCellStatus(w, c);
+      const dose = tlDoseForWeek(w, c);
+      const hasCustom = customDoses[c.name]?.[w] !== undefined;
       const catCls = CAT[c.cat]?.cls || '';
-      const cls = status==='on' ? `g-cell tl-on ${catCls}`
-                : status==='off' ? 'g-cell g-off tl-off'
-                : 'g-cell tl-inactive';
-      const tip = `${c.name} W${w}: ${status.toUpperCase()}${status==='on'?` · ${wtLabel}`:''}`;
-      return `<div class="${cls}" title="${tip}"></div>`;
+      const cls = status==='on' ? `tl-cell tl-on ${catCls}${hasCustom?' tl-custom':''}`
+                : status==='off' ? `tl-cell tl-off${hasCustom?' tl-custom':''}`
+                : `tl-cell tl-inactive${hasCustom?' tl-custom':''}`;
+      const doseStr = dose > 0 ? `${dose}` : '';
+      const tip = `${c.name} W${w} · ${status.toUpperCase()}${dose>0?` · ${dose}${wt?.unit||''}`:''}${hasCustom?' (custom)':''} · click to edit`;
+      return `<div class="${cls}" title="${tip}" onclick="openDoseEdit('${escName}',${w})">${doseStr}</div>`;
     }).join('');
 
-    const control = isContinuous
-      ? `<span class="tl-badge tl-cont-badge" title="Tidak ada OFF cycle">CONTINUOUS</span>`
+    // Per-row summary
+    const sum = tlVialSummary(c, weeks);
+    grandTotalVials += sum.vials;
+    const vSpec = VSPECS[c.name];
+    const vPrice = vSpec?.vPrice || 0;
+    const rowCost = sum.vials * vPrice;
+    grandTotalCost += rowCost;
+
+    const cycleInfo = isContinuous
+      ? `<span class="tl-cyc-badge tl-cyc-cont">∞</span>`
       : isSpecial
-      ? `<span class="tl-badge tl-special" title="${onP.raw||onP.type}">${onP.type.toUpperCase()}</span>`
-      : `<div class="tl-run">
-          <input type="number" min="1" max="56" value="${startVal}" id="tl-start-${safeName}" title="Start week (W1–W56)">
-          <button class="tl-run-btn" onclick="runCycle('${escName}')">▶ Run</button>
-        </div>`;
+      ? `<span class="tl-cyc-badge tl-cyc-special">${onP.type==='bundle_ref'?'BND':onP.type==='prn'?'PRN':onP.type==='goal'?'GOAL':'—'}</span>`
+      : `<span class="tl-cyc">ON: <b>${onP.max||'?'}w</b> · OFF: <b>${(parseCycleText(c.off_cycle).max ?? '—')}w</b> · start W${startW}</span>`;
+
+    const summaryHtml = sum.vials > 0
+      ? `<span class="tl-sum-v">${sum.vials}<small>v</small></span> <span class="tl-sum-d">${Math.round(sum.totalDose)}${sum.unit}</span>${rowCost>0?` <span class="tl-sum-c">${rpM(rowCost)}</span>`:''}`
+      : `<span class="tl-sum-empty">—</span>`;
 
     return `<div class="tl-row">
       <div class="tl-lbl">
-        <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8px">${(c.cat||'off').toUpperCase()}</span>
-        <span class="tl-name" title="${c.name} · on=${c.on_cycle||'-'} · off=${c.off_cycle||'-'} · ${wtLabel}">${c.name}</span>
-        ${control}
+        <div class="tl-lbl-top">
+          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8px">${(c.cat||'off').toUpperCase()}</span>
+          <span class="tl-name" title="${c.name}">${c.name}</span>
+        </div>
+        <div class="tl-lbl-bot">${cycleInfo}</div>
       </div>
       <div class="tl-cells">${cells}</div>
+      <div class="tl-sum">${summaryHtml}</div>
     </div>`;
   }).join('');
 
   return `<div class="card">
-    <div class="card-title"><span class="ico">🗓</span> Timeline — Run Cycle Preview · ${yCompounds.length} compounds</div>
+    <div class="card-title">
+      <span class="ico">🗓</span> Timeline — Per-Week Dose & Vial Plan · ${yCompounds.length} compounds
+      <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">
+        Total: <span style="color:var(--acc)">${grandTotalVials} vial</span> · ${rpM(grandTotalCost)}
+      </span>
+    </div>
     <div class="tl-legend">
-      <span><span class="tl-sw tl-sw-on"></span> ON cycle</span>
+      <span><span class="tl-sw tl-sw-on"></span> ON cycle (dose default dari weekly_total)</span>
       <span><span class="tl-sw tl-sw-off"></span> OFF (washout)</span>
       <span><span class="tl-sw tl-sw-cont"></span> Continuous</span>
-      <span><span class="tl-sw tl-sw-inactive"></span> Not started / N/A</span>
+      <span><span class="tl-sw tl-sw-inactive"></span> Not in cycle / N/A</span>
+      <span style="margin-left:auto">💡 <b>Click cell</b> untuk set/edit dose per week</span>
     </div>
     <div class="tl-wrap"><div class="tl-grid">${qBand}${wkRow}${rows}</div></div>
     <div class="note" style="margin-top:8px;font-size:10px;color:var(--t3);line-height:1.5">
-      <b>Phase A MVP</b>: Pattern dari kolom <code>on_cycle</code>/<code>off_cycle</code> peptide. Klik <b>▶ Run</b> per row → cell ON/OFF auto-color.
-      Cycle "Run" disimpan in-memory only (reset saat refresh). Continuous compound auto-fill, PRN/Goal/Bundle gak punya pattern reguler.
-      Per-cell dose edit + vial calc → next session (Phase B).
+      <b>Auto cycle</b>: pattern derive otomatis dari kolom <code>on_cycle</code>/<code>off_cycle</code> peptide, start week dari quarter paling awal di DM.
+      <b>Dose default</b>: cell ON otomatis isi value <code>weekly_total</code>. <b>Click cell</b> untuk override per week — disimpan di table <code>custom_doses</code> (butuh login).
+      <b>Vial calc</b>: total dose ÷ vial_size, dibulatkan ke atas. Continuous compound auto-fill, PRN/Goal/Bundle gak ada pattern reguler.
     </div>
   </div>`;
 }

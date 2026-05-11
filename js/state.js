@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=19';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=20';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -286,30 +286,60 @@ export function parseWeeklyTotal(text){
   return {raw:text};
 }
 
-// Timeline in-memory state (Phase A — gak persist ke DB)
-export const TL = {
-  cycleRuns: {}   // { compoundName: { startWeek: int } }
-};
-
-export function runCycleFor(name, startWeek){
-  TL.cycleRuns[name] = { startWeek: Math.max(1, Math.min(56, parseInt(startWeek)||1)) };
+// Auto-derive start week dari quarter paling awal compound dipilih di DM.
+// Kalau gak ada di DM manapun, fallback W1.
+export function tlAutoStartWeek(compoundName){
+  for(const qid of QUARTERS){
+    if(DM.selectedByQuarter[qid]?.has(compoundName)){
+      const wks = weeksInQuarter(qid);
+      if(wks.length > 0) return wks[0];
+    }
+  }
+  return 1;
 }
 
-// Hitung status sel di Timeline grid (compound × week)
-// Return: 'on' | 'off' | 'inactive'
+// Hitung status sel di Timeline grid (compound × week) — auto dari on_cycle/off_cycle
+// + start week dari DM. Return: 'on' | 'off' | 'inactive'
 export function tlCellStatus(week, compound){
   if(!compound) return 'inactive';
   const onP = parseCycleText(compound.on_cycle);
   if(onP.type === 'continuous') return 'on';
-  if(onP.type === 'prn' || onP.type === 'goal' || onP.type === 'bundle_ref' || onP.type === 'unknown') return 'inactive';
-  const run = TL.cycleRuns[compound.name];
-  if(!run || onP.type !== 'weeks') return 'inactive';
+  if(onP.type === 'prn' || onP.type === 'goal' || onP.type === 'bundle_ref' || onP.type === 'unknown' || onP.type === 'custom') return 'inactive';
+  if(onP.type !== 'weeks') return 'inactive';
+  const startWeek = tlAutoStartWeek(compound.name);
   const offP = parseCycleText(compound.off_cycle);
   const onLen = onP.max;
   const offLen = (offP.type === 'weeks') ? offP.max : (offP.type === 'none' ? 0 : 4);
-  const delta = week - run.startWeek;
+  const delta = week - startWeek;
   if(delta < 0) return 'inactive';
   if(offLen === 0) return 'on';
   const cycleLen = onLen + offLen;
   return (delta % cycleLen) < onLen ? 'on' : 'off';
+}
+
+// Hitung dose untuk week tertentu: custom > auto (weekly_total kalau ON) > 0
+export function tlDoseForWeek(week, compound){
+  if(!compound) return 0;
+  const custom = customDoses[compound.name]?.[week];
+  if(custom !== undefined) return custom;
+  const status = tlCellStatus(week, compound);
+  if(status !== 'on') return 0;
+  const wt = parseWeeklyTotal(compound.weekly_total);
+  return wt?.value || 0;
+}
+
+// Vial summary per compound — total dose + vial needs
+export function tlVialSummary(compound, weeks){
+  if(!compound) return {totalDose:0, vials:0, unit:'mg', dosedWeeks:0};
+  let totalDose = 0;
+  let dosedWeeks = 0;
+  weeks.forEach(w => {
+    const d = tlDoseForWeek(w, compound);
+    if(d > 0){ totalDose += d; dosedWeeks++; }
+  });
+  const vs = VSPECS[compound.name];
+  const vSize = vs?.vSize || 1;
+  const unit = vs?.unit || 'mg';
+  const vials = (totalDose > 0 && vSize > 0) ? Math.ceil(totalDose / vSize) : 0;
+  return {totalDose, vials, unit, dosedWeeks};
 }
