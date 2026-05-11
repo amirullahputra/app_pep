@@ -5,8 +5,23 @@ import { _setPepData, COMPOUNDS, VSPECS } from './data.js';
 import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
-const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1aGhvcXB2d3p6cmx3Z2Z1Z3NiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTg5NTgsImV4cCI6MjA5Mzg5NDk1OH0.KDkDqrsbburSAsaKgNUh2QK5YbFCxqM6aDF-DIqGQaU';
+const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
 export const supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+
+// ── REST helper (bypass supa client untuk public reads) ──
+// Reason: supa client init bisa hang di Chrome incognito karena GoTrueClient
+// navigator.locks/storage init. Plain fetch identik dengan curl yang work.
+async function restFetch(table, query=''){
+  const url = `${SUPA_URL}/rest/v1/${table}${query?'?'+query:''}`;
+  const res = await fetch(url, {
+    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+  });
+  if(!res.ok){
+    const body = await res.text().catch(()=>'');
+    throw new Error(`${table}: HTTP ${res.status} ${body.slice(0,200)}`);
+  }
+  return res.json();
+}
 
 // ── DYNAMIC PEP DATA LOAD (compounds + phases + redundancy_rules) ──
 let _pepLoaded = false;
@@ -44,24 +59,22 @@ export async function loadAllPepData(){
   if(_pepLoaded) return;
 
   const dbg = (m) => { try { window.updateDebugOverlay && window.updateDebugOverlay(m); } catch(_){} };
-  dbg('fetching compounds...');
-  const cRes = await supa.from('compounds').select('*').order('sort_order',{nullsFirst:false}).order('name');
-  dbg(`compounds:${cRes.data?.length||0} err:${cRes.error?.message||'no'}`);
-  if(cRes.error){ console.error('[db] compounds load:', cRes.error); throw cRes.error; }
 
-  dbg('fetching phases...');
-  const pRes = await supa.from('phases').select('*').order('sort_order');
-  dbg(`phases:${pRes.data?.length||0} err:${pRes.error?.message||'no'}`);
-  if(pRes.error){ console.error('[db] phases load:',    pRes.error); throw pRes.error; }
-
-  dbg('fetching redundancy_rules...');
-  const rRes = await supa.from('redundancy_rules').select('*').order('sort_order');
-  dbg(`redund:${rRes.data?.length||0} err:${rRes.error?.message||'no'}`);
-  if(rRes.error){ console.error('[db] rules load:',     rRes.error); throw rRes.error; }
-
-  const compoundRows = cRes.data || [];
-  const phaseRows    = pRes.data || [];
-  const ruleRows     = rRes.data || [];
+  // Plain fetch() bypass supa client — work in Chrome incognito where
+  // GoTrueClient init can hang on navigator.locks/storage.
+  let compoundRows, phaseRows, ruleRows;
+  try {
+    dbg('fetch compounds...');
+    compoundRows = await restFetch('compounds', 'select=*&order=sort_order.asc.nullslast,name.asc');
+    dbg(`compounds:${compoundRows.length} · fetch phases...`);
+    phaseRows = await restFetch('phases', 'select=*&order=sort_order.asc');
+    dbg(`phases:${phaseRows.length} · fetch rules...`);
+    ruleRows = await restFetch('redundancy_rules', 'select=*&order=sort_order.asc');
+    dbg(`rules:${ruleRows.length} · transforming...`);
+  } catch(e){
+    dbg('FETCH FAIL: '+(e.message||e));
+    throw e;
+  }
 
   // Build derived structures
   const SC={}, SP={}, MECHS={}, VSPECS={}, SHELF_LIFE={};
@@ -123,13 +136,16 @@ export async function saveCompoundEdit(name, updates){
 
 export async function loadQuartersFromDB(){
   if(_quartersLoaded)return _quartersCache||[];
-  const{data,error}=await supa.from('quarters')
-    .select('quarter_id,phase_type,window_raw,total_weeks,bb_start,bb_end,bf_start,bf_end')
-    .order('quarter_id');
-  if(error){console.error('[db] loadQuartersFromDB:',error);throw error;}
-  _quartersCache=data||[];
+  // Plain fetch() bypass supa client (sama alasan dengan loadAllPepData)
+  try {
+    _quartersCache = await restFetch('quarters',
+      'select=quarter_id,phase_type,window_raw,total_weeks,bb_start,bb_end,bf_start,bf_end&order=quarter_id.asc');
+  } catch(e){
+    console.error('[db] loadQuartersFromDB:', e);
+    throw e;
+  }
   _quartersLoaded=true;
-  console.info(`[db] Loaded ${(data||[]).length} quarters`);
+  console.info(`[db] Loaded ${_quartersCache.length} quarters`);
   return _quartersCache;
 }
 
