@@ -131,9 +131,7 @@ function setTab(n){S.tab=n;renderNav();renderPanels();}
 window.setPhase = setPhase;
 window.setTab = setTab;
 
-// ── DECISION MATRIX — Drag & Drop Handlers ──
-// Drop sources: library (drag dari kiri), atau salah satu stage (drag antar zones)
-// Drop targets: salah satu dari 3 zones (watchlist/tentatif/deal)
+// ── DECISION MATRIX — Drag & Drop Handlers (single "Selected for Fase N" zone) ──
 window.onDmDragStart = function(ev, compoundName, source){
   ev.dataTransfer.setData('text/plain', JSON.stringify({ name: compoundName, source }));
   ev.dataTransfer.effectAllowed = 'move';
@@ -146,7 +144,8 @@ window.onDmDragOver = function(ev){
 window.onDmDragLeave = function(ev){
   ev.currentTarget.classList.remove('drag-over');
 };
-window.onDmDrop = async function(ev, targetStage){
+// Drop ke "Selected" zone — add compound ke selectedByPhase[currentPhase]
+window.onDmDrop = async function(ev){
   ev.preventDefault();
   ev.currentTarget.classList.remove('drag-over');
   let payload;
@@ -154,25 +153,43 @@ window.onDmDrop = async function(ev, targetStage){
   catch(_){ return; }
   const { name, source } = payload || {};
   if(!name) return;
-  // Same source == target? do nothing (drop on same column)
-  if(source === targetStage) return;
-  // Validate phase context
+  if(source === 'selected') return;  // drag dari zone ke zone sendiri = no-op
   const ph = S.ph;
   if(ph === 0){ alert('Pilih Fase 1/2/3 dulu'); return; }
   if(!S.user){ alert('Login dulu untuk menyimpan Decision Matrix'); return; }
+  if(DM.selectedByPhase[ph].has(name)) return;  // sudah selected
 
-  // Optimistic update local state
-  if(!DM.stagesByPhase[ph]) DM.stagesByPhase[ph] = new Map();
-  DM.stagesByPhase[ph].set(name, targetStage);
+  // Optimistic add
+  DM.selectedByPhase[ph].add(name);
   syncDMStages();
   renderPanels();
 
-  // Persist to DB
-  try { await setDMStage(S.user.id, ph, name, targetStage); }
+  try { await setDMStage(S.user.id, ph, name, 'deal'); }
   catch(e){
     alert('Gagal simpan: '+(e.message||e));
-    // Revert optimistic
-    DM.stagesByPhase[ph].delete(name);
+    DM.selectedByPhase[ph].delete(name);
+    syncDMStages();
+    renderPanels();
+  }
+};
+
+// Klik card di library untuk toggle add/remove juga (alternative to drag)
+window.dmToggleSelect = async function(compoundName){
+  const ph = S.ph;
+  if(ph === 0){ alert('Pilih Fase 1/2/3 dulu'); return; }
+  if(!S.user){ alert('Login dulu untuk menyimpan Decision Matrix'); return; }
+  const isSelected = DM.selectedByPhase[ph].has(compoundName);
+  if(isSelected){
+    return window.dmRemoveStage(compoundName);
+  }
+  // Optimistic add
+  DM.selectedByPhase[ph].add(compoundName);
+  syncDMStages();
+  renderPanels();
+  try { await setDMStage(S.user.id, ph, compoundName, 'deal'); }
+  catch(e){
+    alert('Gagal simpan: '+(e.message||e));
+    DM.selectedByPhase[ph].delete(compoundName);
     syncDMStages();
     renderPanels();
   }
@@ -182,37 +199,39 @@ window.dmRemoveStage = async function(compoundName){
   const ph = S.ph;
   if(ph === 0) return;
   if(!S.user){ alert('Login dulu'); return; }
-  const had = DM.stagesByPhase[ph]?.get(compoundName);
-  if(!had) return;
+  if(!DM.selectedByPhase[ph].has(compoundName)) return;
 
-  // Optimistic remove
-  DM.stagesByPhase[ph].delete(compoundName);
+  DM.selectedByPhase[ph].delete(compoundName);
   syncDMStages();
   renderPanels();
 
   try { await removeDMStage(S.user.id, ph, compoundName); }
   catch(e){
     alert('Gagal hapus: '+(e.message||e));
-    DM.stagesByPhase[ph].set(compoundName, had);   // revert
+    DM.selectedByPhase[ph].add(compoundName);
     syncDMStages();
     renderPanels();
   }
 };
 
-// Load + optional seed Decision Matrix stages untuk user
+// Load DM selections untuk user — convert DB rows ke Set per phase
 async function refreshDMStages(){
   if(!S.user) return;
   try {
     const fresh = await loadDMStages(S.user.id);
-    DM.stagesByPhase = fresh;
-    // Auto-seed setiap phase yang kosong (1, 2, 3)
+    // fresh: { 1: Map<name, stage>, 2: Map<...>, 3: Map<...> } — convert ke Set
+    DM.selectedByPhase = {
+      1: new Set([...(fresh[1]||new Map()).keys()]),
+      2: new Set([...(fresh[2]||new Map()).keys()]),
+      3: new Set([...(fresh[3]||new Map()).keys()]),
+    };
+    // Auto-seed setiap phase yang kosong
     for(const ph of [1, 2, 3]){
-      if(DM.stagesByPhase[ph] && DM.stagesByPhase[ph].size === 0){
+      if(DM.selectedByPhase[ph].size === 0){
         const seed = buildDefaultSeed();
         if(seed.length){
           await seedDMStages(S.user.id, ph, seed);
-          // Reload stages this phase
-          DM.stagesByPhase[ph] = new Map(seed.map(s => [s.compound_name, s.stage]));
+          DM.selectedByPhase[ph] = new Set(seed.map(s => s.compound_name));
           DM.seedBanner[ph] = true;
         }
       }

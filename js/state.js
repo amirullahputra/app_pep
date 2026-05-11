@@ -108,44 +108,44 @@ export function autoPickBudget(){
 }
 
 // ── DM STATE ──
-// stages PER-FASE: { [phaseId]: Map<compoundName, 'watchlist'|'tentatif'|'deal'> }
-// stages: backward-compat reference ke stagesByPhase[currentPhase], di-update
-// setelah setPhase() dipanggil. Konsumen existing (dmDealt, pVial, pBudget)
-// tetap bisa pakai DM.stages.
+// selectedByPhase PER-FASE: { [phaseId]: Set<compoundName> }
+// Drop 3-stage model — sekarang cuma boolean "selected for fase" per compound.
+// stages: backward-compat Map<name, 'deal'> untuk konsumen lama (pVial, pBudget pakai dmDealt())
 export const DM={
-  stagesByPhase:{ 1:new Map(), 2:new Map(), 3:new Map() },
-  stages:new Map(),         // pointer ke stagesByPhase[S.ph], di-sync via syncDMStages()
+  selectedByPhase:{ 1:new Set(), 2:new Set(), 3:new Set() },
+  stages:new Map(),         // pointer Map<name,'deal'> derived dari selectedByPhase[S.ph]
   filterLayer:'all',
   filterStatus:'all',
   filterSport:'all',
   filterEff:'all',
   sortCol:'prio',
   sortDir:-1,
-  seedBanner:{ 1:false, 2:false, 3:false }  // tampil "auto-seeded" banner sekali per phase
+  seedBanner:{ 1:false, 2:false, 3:false }
 };
 
-// Sync DM.stages ke phase aktif. Panggil setiap kali S.ph atau stagesByPhase berubah.
+// Sync DM.stages ke phase aktif (derived from Set). Panggil setiap kali S.ph atau selectedByPhase berubah.
 export function syncDMStages(){
   const ph = S.ph || 1;
-  if(!DM.stagesByPhase[ph]) DM.stagesByPhase[ph] = new Map();
-  DM.stages = DM.stagesByPhase[ph];
+  if(!DM.selectedByPhase[ph]) DM.selectedByPhase[ph] = new Set();
+  // Rebuild compat Map: setiap selected → 'deal' (untuk dmDealt + downstream)
+  DM.stages = new Map([...DM.selectedByPhase[ph]].map(n => [n, 'deal']));
 }
 
-// Default seed: compounds dengan sport score >=60 -> watchlist.
-// Dipanggil saat fase tertentu belum punya stages di DB.
+// Default seed: compounds dengan sport score >=60 → selected for phase.
+// Dipanggil saat phase tertentu belum punya seleksi di DB.
 export function buildDefaultSeed(){
   const seed = [];
   COMPOUNDS.forEach(c=>{
     const s = SP[c.name];
     if(!s) return;
     const score = Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
-    if(score >= 60) seed.push({ compound_name:c.name, stage:'watchlist' });
+    if(score >= 60) seed.push({ compound_name:c.name, stage:'deal' });
   });
   return seed;
 }
 
-// helper: compound yang masuk Vial Planner = tentatif + deal (di phase aktif)
-export function dmDealt(){return new Set([...DM.stages.entries()].filter(([,v])=>v==='tentatif'||v==='deal').map(([k])=>k));}
+// helper: semua selected compound di phase aktif (sebelumnya: tentatif+deal). Sekarang: semua di selectedByPhase[ph]
+export function dmDealt(){return new Set(DM.selectedByPhase[S.ph||1]||new Set());}
 // backward compat shim agar pVial() tidak crash sebelum di-update
 export const _dmCheckedShim=()=>dmDealt();
 

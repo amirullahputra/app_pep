@@ -246,7 +246,7 @@ export function dmToggleAll(){
 export function dmSetFilter(key,val){DM[key]=val;window.renderPanels();}
 export function dmUpdateSummary(){window.renderPanels();}
 
-// ── pDecision — Drag-Drop Builder (Library + 3 Stage Zones per fase) ──
+// ── pDecision — Drag-Drop Builder (Library + Selected zone per fase) ──
 export function pDecision(){
   const ph = S.ph;
 
@@ -258,52 +258,51 @@ export function pDecision(){
     </div>`;
   }
 
-  const phaseStages = DM.stagesByPhase[ph] || new Map();   // Map<name, stage>
+  const selectedSet = DM.selectedByPhase[ph] || new Set();
   const showSeedBanner = DM.seedBanner[ph];
 
-  // Helper: derive prio + cost per compound utk display di card
-  const compoundCard = (c, inStage=false) => {
-    const sport = SP[c.name];
-    const sportScore = sport ? Math.round((sport.z2*.3+sport.pw*.2+sport.rc*.2+sport.hr*.15+sport.cn*.15)*20) : 0;
+  const sportScoreOf = (name) => {
+    const s = SP[name];
+    if(!s) return 0;
+    return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
+  };
+
+  const compoundCard = (c, source) => {
+    const inLib = source === 'library';
+    const inSelected = source === 'selected';
+    const sportScore = sportScoreOf(c.name);
     const cost = c.c[`f${ph}`]?.cost || 0;
     const costStr = cost > 0 ? rpM(cost) : '—';
-    return `<div class="dm-card${inStage?' in-stage':''}"
+    const isSelected = selectedSet.has(c.name);
+    const dimClass = inLib && isSelected ? ' in-stage' : '';
+    const clickHandler = inLib
+      ? `onclick="dmToggleSelect('${c.name.replace(/'/g,"\\'")}')"`
+      : '';
+    const removeBtn = inSelected
+      ? `<button class="dm-card-remove" onclick="dmRemoveStage('${c.name.replace(/'/g,"\\'")}')" title="Hapus dari selected">✕</button>`
+      : '';
+    return `<div class="dm-card${dimClass}"
       draggable="true"
-      ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','library')">
+      ${clickHandler}
+      ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','${source}')">
       <div class="dm-card-name" title="${c.name}">${c.name}</div>
       <div class="dm-card-meta">
-        <span class="dm-cat-pill ${c.cat}">${(CAT[c.cat]?.n||c.cat).slice(0,3)}</span>
+        ${inLib ? `<span class="dm-cat-pill ${c.cat}">${(CAT[c.cat]?.n||c.cat).slice(0,3)}</span>` : ''}
         <span class="dm-card-cost">${costStr}</span>
         <span class="dm-card-sport">★${sportScore}</span>
+        ${removeBtn}
       </div>
     </div>`;
   };
 
-  const stageCard = (c, stage) => {
-    const sport = SP[c.name];
-    const sportScore = sport ? Math.round((sport.z2*.3+sport.pw*.2+sport.rc*.2+sport.hr*.15+sport.cn*.15)*20) : 0;
-    const cost = c.c[`f${ph}`]?.cost || 0;
-    const costStr = cost > 0 ? rpM(cost) : '—';
-    return `<div class="dm-card"
-      draggable="true"
-      ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','${stage}')">
-      <div class="dm-card-name" title="${c.name}">${c.name}</div>
-      <div class="dm-card-meta">
-        <span class="dm-card-cost">${costStr}</span>
-        <span class="dm-card-sport">★${sportScore}</span>
-        <button class="dm-card-remove" onclick="dmRemoveStage('${c.name.replace(/'/g,"\\'")}')" title="Hapus dari ${stage}">✕</button>
-      </div>
-    </div>`;
-  };
-
-  // ── LIBRARY (kiri 30%) — semua 29 compounds, filterable ──
+  // ── LIBRARY (kiri 30%) — alphabetical sort ──
   const search = (DM.libSearch || '').toLowerCase();
   const filterLayer = DM.filterLayer || 'all';
   const filteredLibrary = COMPOUNDS.filter(c => {
     if(filterLayer !== 'all' && c.cat !== filterLayer) return false;
     if(search && !c.name.toLowerCase().includes(search)) return false;
     return true;
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   const layerChips = ['all', ...Object.keys(CAT)].map(k => {
     const lbl = k === 'all' ? 'Semua' : (CAT[k]?.n || k);
@@ -319,46 +318,34 @@ export function pDecision(){
       <div class="dm-lib-filters">${layerChips}</div>
       ${filteredLibrary.length === 0
         ? '<div class="dm-zone-empty">Tidak ada match</div>'
-        : filteredLibrary.map(c => compoundCard(c, phaseStages.has(c.name))).join('')
+        : filteredLibrary.map(c => compoundCard(c, 'library')).join('')
       }
     </div>`;
 
-  // ── STAGE ZONES (kanan 70%) — Watchlist, Tentatif, Deal ──
-  const stageList = (stage) => {
-    const names = [...phaseStages.entries()].filter(([,v]) => v === stage).map(([k]) => k);
-    if(!names.length) return `<div class="dm-zone-empty">Drag dari library ke sini</div>`;
-    return names.map(n => {
-      const c = COMPOUNDS.find(x => x.name === n);
-      return c ? stageCard(c, stage) : '';
-    }).join('');
-  };
+  // ── SELECTED ZONE (kanan 70%) — single drop zone, alphabetical sort ──
+  const selectedCompounds = [...selectedSet]
+    .map(n => COMPOUNDS.find(x => x.name === n))
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  const zoneInfo = [
-    { id:'watchlist', icon:'👀', label:'Watchlist' },
-    { id:'tentatif',  icon:'🔄', label:'Tentatif'  },
-    { id:'deal',      icon:'✅', label:'Deal'      },
-  ];
-
-  const zonesHtml = `
-    <div class="dm-zones">
-      ${zoneInfo.map(z => {
-        const names = [...phaseStages.entries()].filter(([,v]) => v === z.id);
-        return `<div class="dm-zone ${z.id}"
-          ondragover="onDmDragOver(event)"
-          ondragleave="onDmDragLeave(event)"
-          ondrop="onDmDrop(event,'${z.id}')">
-          <div class="dm-zone-hdr">
-            <span>${z.icon} ${z.label}</span>
-            <span class="dm-zone-cnt">${names.length}</span>
-          </div>
-          ${stageList(z.id)}
-        </div>`;
-      }).join('')}
+  const selectedHtml = `
+    <div class="dm-zone selected-zone"
+      ondragover="onDmDragOver(event)"
+      ondragleave="onDmDragLeave(event)"
+      ondrop="onDmDrop(event)">
+      <div class="dm-zone-hdr">
+        <span>✅ Selected for Fase ${ph}</span>
+        <span class="dm-zone-cnt">${selectedCompounds.length}</span>
+      </div>
+      ${selectedCompounds.length === 0
+        ? `<div class="dm-zone-empty">Drag compound dari Library ke sini, atau klik card di library untuk add.</div>`
+        : selectedCompounds.map(c => compoundCard(c, 'selected')).join('')
+      }
     </div>`;
 
   const seedBannerHtml = showSeedBanner ? `
     <div class="dm-seed-banner">
-      <span style="flex:1">💡 Auto-seeded compounds dengan sport score ≥60 ke Watchlist. Edit sesuai kebutuhan.</span>
+      <span style="flex:1">💡 Auto-seeded compounds dengan sport score ≥60. Edit sesuai kebutuhan.</span>
       <button onclick="DM.seedBanner[${ph}]=false;renderPanels()">Tutup</button>
     </div>` : '';
 
@@ -368,9 +355,9 @@ export function pDecision(){
     ${seedBannerHtml}
     <div class="dm-2col">
       ${libraryHtml}
-      ${zonesHtml}
+      ${selectedHtml}
     </div>
-    <div class="note" style="margin-top:12px">Drag compound dari Library ke salah satu stage. Drag antar stage untuk promote/demote. Klik ✕ untuk kembalikan ke library. Compound di Tentatif+Deal otomatis masuk Vial Planner.</div>
+    <div class="note" style="margin-top:12px">Drag compound dari Library ke Selected, atau klik card library untuk toggle add/remove. Klik ✕ di Selected untuk kembalikan ke library. Compound Selected otomatis masuk Vial Planner.</div>
   </div>`;
 }
 
