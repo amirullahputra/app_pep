@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=16';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=17';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=16';
-import * as stateModule from './state.js?v=16';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=16';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=17';
+import * as stateModule from './state.js?v=17';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=17';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=16';
+} from './supabase.js?v=17';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=16';
-import * as panelFns from './panels.js?v=16';
-import * as supaFns from './supabase.js?v=16';
+} from './panels.js?v=17';
+import * as panelFns from './panels.js?v=17';
+import * as supaFns from './supabase.js?v=17';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -286,85 +286,9 @@ function dlPage(){
 }
 window.dlPage = dlPage;
 
-// ── EXPORT COMPOUNDS TO CSV ──
-// Export SEMUA field (USED + LEGACY) per compound supaya user bisa
-// review apa yang ada di DB dan decide keep/drop. Format CSV standar.
-window.exportCompoundsCSV = async function(){
-  try {
-    // Fetch fresh dari Supabase REST API (semua kolom raw, termasuk legacy)
-    const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
-    const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
-    const res = await fetch(`${SUPA_URL}/rest/v1/compounds?select=*&order=name`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-    });
-    if(!res.ok){ alert('Fetch gagal: HTTP '+res.status); return; }
-    const data = await res.json();
-    if(!data.length){ alert('Tidak ada data'); return; }
-
-    // CSV escape: wrap dengan double quote, escape internal " jadi ""
-    const esc = (v) => {
-      if(v === null || v === undefined) return '';
-      let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-      if(s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')){
-        s = '"' + s.replace(/"/g,'""') + '"';
-      }
-      return s;
-    };
-
-    // Column order: USED dulu (sesuai tag), lalu LEGACY, lalu meta
-    const usedCols = [
-      'name','category','mechanism',
-      'sport_z2','sport_pw','sport_rc','sport_hr','sport_cn','risk_text',
-      'score_f1','score_f2','score_f3',
-      'hiv_notes','notes','sort_order',
-      'vial_unit','vial_size','vial_price_idr','vial_label',
-      'shelf_life_days','timing_note','doses_jsonb'
-    ];
-    const legacyCols = [
-      'name_full','fungsi_utama','layer','route','dose_per_inject','frequency',
-      'weekly_total','timing_best','on_cycle','off_cycle','storage','pack_size',
-      'price_idr','price_per_mg_idr','score_avg',
-      'f1_on_weeks','f1_cost_idr','f2_on_weeks','f2_cost_idr','f3_on_weeks','f3_cost_idr',
-      'total_cost_idr','active_f1','active_f2','active_f3','is_bundle'
-    ];
-    const metaCols = ['id','created_at'];
-
-    // Tag row: tag setiap kolom S/D/L/M (Static/Dynamic/Legacy/Meta) — pertama
-    const allCols = [...usedCols, ...legacyCols, ...metaCols];
-    const tags = {};
-    // STATIC tags
-    ['name','category','mechanism','sport_z2','sport_pw','sport_rc','sport_hr','sport_cn','risk_text','score_f1','score_f2','score_f3','hiv_notes','notes','sort_order','vial_unit','shelf_life_days'].forEach(c => tags[c] = 'STATIC');
-    // DYNAMIC tags
-    ['vial_size','vial_price_idr','vial_label','timing_note','doses_jsonb'].forEach(c => tags[c] = 'DYNAMIC');
-    // LEGACY tags
-    legacyCols.forEach(c => tags[c] = 'LEGACY');
-    // META
-    metaCols.forEach(c => tags[c] = 'META');
-
-    // Build CSV
-    const rows = [];
-    rows.push(allCols.join(','));                              // Header row 1: column names
-    rows.push(allCols.map(c => tags[c] || '').join(','));      // Header row 2: tags
-    data.forEach(c => {
-      rows.push(allCols.map(col => esc(c[col])).join(','));
-    });
-    const csv = '﻿' + rows.join('\r\n');   // BOM utk Excel UTF-8 compat
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-    a.download = `compounds_export_${ts}.csv`;
-    a.href = url;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch(e){
-    alert('Export gagal: '+(e.message||e));
-    console.error('exportCompoundsCSV:', e);
-  }
-};
+// Export CSV moved out of UI — pakai file static `library_pep.csv` di
+// folder root `c:\Users\Auobvee\Desktop\App\`. Lihat plan file untuk
+// regenerate (Python script di /tmp).
 
 // ── TIMER ──
 const PROTOCOL_START=new Date('2026-07-06T00:00:00');
