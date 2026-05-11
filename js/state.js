@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=21';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=22';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -300,7 +300,8 @@ export function tlSetCycle(qid, name, field, value){
   const key = `${qid}|${name}`;
   if(!TL.cycles[key]) TL.cycles[key] = {on: 0, off: 0};
   const v = parseInt(value);
-  TL.cycles[key][field] = isNaN(v) ? 0 : Math.max(0, v);
+  const qWeeks = weeksInQuarter(qid).length || 56;
+  TL.cycles[key][field] = isNaN(v) ? 0 : Math.max(0, Math.min(qWeeks, v));
 }
 
 // Seed defaults dari master compound (parsed dari on_cycle/off_cycle CSV)
@@ -332,7 +333,10 @@ export function tlCellStatus(week, compound, qid){
   const qStartW = weeksInQ[0];
   const delta = week - qStartW;
   if(delta < 0) return 'inactive';
-  if(offLen === 0) return 'on';
+  if(offLen === 0){
+    // OFF=0 = one-shot: ON untuk `on` minggu pertama, sisanya INACTIVE (gak loop)
+    return delta < onLen ? 'on' : 'inactive';
+  }
   const cycleLen = onLen + offLen;
   return (delta % cycleLen) < onLen ? 'on' : 'off';
 }

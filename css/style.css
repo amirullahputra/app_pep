@@ -259,9 +259,9 @@ tbody tr:hover td{background:var(--bg2)}
 .tl-seed-btn{margin-left:auto;font-size:11px;padding:3px 7px;cursor:pointer;background:var(--bg2);color:var(--t2);border:1px solid var(--bdr);border-radius:4px;font-weight:700}
 .tl-seed-btn:hover{background:var(--acc);color:#fff;border-color:var(--acc)}
 .tl-cells{display:flex;gap:2px;flex:1}
-.tl-cell{flex:1;min-width:42px;height:46px;border-radius:4px;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.95);transition:transform .1s,opacity .1s}
+.tl-cell{flex:1;min-width:42px;height:46px;border-radius:4px;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--t0);text-shadow:0 1px 2px rgba(255,255,255,.7),0 0 4px rgba(255,255,255,.4);transition:transform .1s,opacity .1s}
 .tl-cell:hover{transform:scale(1.08);z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-.tl-on{opacity:.92}
+.tl-on{opacity:.95}
 .tl-off{background:var(--bg3);opacity:.55;color:var(--t3)}
 .tl-inactive{background:rgba(150,150,150,.1);color:var(--t3)}
 .tl-custom{outline:2px solid var(--hor);outline-offset:-2px}
