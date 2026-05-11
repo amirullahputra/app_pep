@@ -110,6 +110,9 @@ body{background:var(--bg);color:var(--t0);font-family:'Plus Jakarta Sans',system
 
 .cmp-info-footer{font-size:11px;color:var(--t2);padding:.625rem .875rem;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r);margin-top:.5rem;line-height:1.55}
 .cmp-info-footer strong{color:var(--t0)}
+
+.cmp-export-btn{padding:6px 14px;border-radius:6px;border:1.5px solid var(--f3);background:var(--f3-bg);color:var(--f3);font-size:11px;font-weight:800;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:.12s;margin-left:8px;white-space:nowrap}
+.cmp-export-btn:hover{background:var(--f3);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.3)}
 .ph-tag{font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px}
 .ph-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .ph-name{font-size:14px;font-weight:800;color:var(--t0);margin-bottom:2px}

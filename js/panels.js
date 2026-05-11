@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=15';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=16';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,11 +10,11 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
-} from './state.js?v=15';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=15';
+} from './state.js?v=16';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=16';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=15';
+import * as stateModule from './state.js?v=16';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -877,6 +877,7 @@ export function pCompounds(){
       </div>`).join('')}
     <input class="srch" placeholder="Cari compound..." value="${S.search}" oninput="S.search=this.value;renderPanels()">
     <span style="margin-left:auto;font-size:11px;color:var(--t2);font-weight:700">${filtered.length}/${COMPOUNDS.length} compounds</span>
+    <button onclick="exportCompoundsCSV()" class="cmp-export-btn" title="Download CSV (edit di Excel/Sheets)">📥 Export CSV</button>
   </div>`;
 
   // Legend
