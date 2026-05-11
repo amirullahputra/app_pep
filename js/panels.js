@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=13';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=14';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,11 +10,11 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
-} from './state.js?v=13';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=13';
+} from './state.js?v=14';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=14';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=13';
+import * as stateModule from './state.js?v=14';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -661,9 +661,23 @@ export function pVial(){
 // ──────────────────────────────────────────
 export function pTimeline(){
   const weeks=Array.from({length:56},(_,i)=>i+1);
-  const phSegs=[{ph:1,s:1,e:28,col:'rgba(255,107,53,.75)',l:'F1 >15%'},{ph:2,s:29,e:44,col:'rgba(245,158,11,.75)',l:'F2 15–10%'},{ph:3,s:45,e:56,col:'rgba(16,185,129,.75)',l:'F3 10–6%'}];
 
-  const phBand=`<div class="gantt-ph-row">${phSegs.map(p=>`<div class="gantt-ph-seg" style="flex:${p.e-p.s+1};background:${p.col};color:#fff">${p.l}</div>`).join('')}</div>`;
+  // Quarter bands — derived dari mapping week→quarter (W1 = 2026-07-06 = Q3 2026)
+  // Group consecutive weeks dengan same quarter
+  const qBandColors = { 1:'rgba(99,102,241,.7)', 2:'rgba(245,158,11,.7)', 3:'rgba(255,107,53,.7)', 4:'rgba(16,185,129,.7)' };
+  const qSegs = [];
+  weeks.forEach(w => {
+    const qid = quarterFromWeek(w);
+    if(!qid) return;
+    const last = qSegs[qSegs.length-1];
+    if(last && last.qid === qid){ last.e = w; }
+    else { qSegs.push({ qid, s: w, e: w, qNum: parseInt(qid.charAt(1)) }); }
+  });
+
+  const phBand = `<div class="gantt-ph-row">${qSegs.map(q => {
+    const col = qBandColors[q.qNum] || 'rgba(67,97,238,.7)';
+    return `<div class="gantt-ph-seg" style="flex:${q.e-q.s+1};background:${col};color:#fff">${quarterLabel(q.qid)}</div>`;
+  }).join('')}</div>`;
   const wkRow=`<div class="gantt-wk-row">${weeks.map(w=>`<div class="gantt-wk">${w%4===0?'W'+w:''}</div>`).join('')}</div>`;
 
   const rows=COMPOUNDS.map(c=>{
@@ -903,7 +917,7 @@ export function pCompounds(){
           ${[1,2,3].map(p=>{const s=(p===1?f1:p===2?f2:f3);return`<div class="cmp-sc"><div class="cmp-sc-lbl">Prio F${p}</div><div class="cmp-sc-v" style="color:${scCol(s.p)}">${s.p}</div></div>`;}).join('')}
         </div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2);margin-bottom:.5rem">
-          <span>F${ph}: <strong style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${cost>0?rpM(cost):'—'}</strong></span>
+          <span>${quarterLabel(qid)}: <strong style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${cost>0?rpM(cost):'—'}</strong></span>
           <span>Eff: <strong style="color:${eff>=10?'var(--f3)':eff>=5?'var(--f2)':'var(--t3)'}">${eff>0?eff+'x':'—'}</strong></span>
           <span>Harga/vial: <strong style="font-family:'JetBrains Mono',monospace">${rp(VSPECS[c.name]?.vPrice||0)}</strong></span>
         </div>
