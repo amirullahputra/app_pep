@@ -43,13 +43,20 @@ function computeCostsPerPhase(compoundRow, phaseRows){
 export async function loadAllPepData(){
   if(_pepLoaded) return;
 
-  const [cRes, pRes, rRes] = await Promise.all([
-    supa.from('compounds').select('*').order('sort_order',{nullsFirst:false}).order('name'),
-    supa.from('phases').select('*').order('sort_order'),
-    supa.from('redundancy_rules').select('*').order('sort_order'),
-  ]);
+  const dbg = (m) => { try { window.updateDebugOverlay && window.updateDebugOverlay(m); } catch(_){} };
+  dbg('fetching compounds...');
+  const cRes = await supa.from('compounds').select('*').order('sort_order',{nullsFirst:false}).order('name');
+  dbg(`compounds:${cRes.data?.length||0} err:${cRes.error?.message||'no'}`);
   if(cRes.error){ console.error('[db] compounds load:', cRes.error); throw cRes.error; }
+
+  dbg('fetching phases...');
+  const pRes = await supa.from('phases').select('*').order('sort_order');
+  dbg(`phases:${pRes.data?.length||0} err:${pRes.error?.message||'no'}`);
   if(pRes.error){ console.error('[db] phases load:',    pRes.error); throw pRes.error; }
+
+  dbg('fetching redundancy_rules...');
+  const rRes = await supa.from('redundancy_rules').select('*').order('sort_order');
+  dbg(`redund:${rRes.data?.length||0} err:${rRes.error?.message||'no'}`);
   if(rRes.error){ console.error('[db] rules load:',     rRes.error); throw rRes.error; }
 
   const compoundRows = cRes.data || [];
