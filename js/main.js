@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=26';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=27';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=26';
-import * as stateModule from './state.js?v=26';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=26';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=27';
+import * as stateModule from './state.js?v=27';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=27';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=26';
+} from './supabase.js?v=27';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=26';
-import * as panelFns from './panels.js?v=26';
-import * as supaFns from './supabase.js?v=26';
+} from './panels.js?v=27';
+import * as panelFns from './panels.js?v=27';
+import * as supaFns from './supabase.js?v=27';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -64,8 +64,11 @@ window.renderPanels = renderPanels;
 //   - total cost (selected × weekly dose × harga vial)
 //   - range minggu yang fall di quarter itu (kalau ada)
 function renderQuarterRow(){
-  // Compute costs untuk semua quarters (pakai tlCostForQuarter — real cost dari Timeline cycle)
-  const quarterStats = QUARTERS.map(qid => {
+  // Fix 4 visible quarter cards: first year of protocol (Q3 2026 - Q2 2027)
+  const VISIBLE_QIDS = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
+
+  // Compute stats untuk SEMUA quarter (untuk grand total akurat)
+  const allStats = QUARTERS.map(qid => {
     const selected = DM.selectedByQuarter[qid] || new Set();
     const weeks = weeksInQuarter(qid);
     let totalCost = 0, totalVials = 0;
@@ -79,13 +82,12 @@ function renderQuarterRow(){
     return { qid, selected, weeks, totalCost, totalVials };
   });
 
-  // Grand total (semua quarters)
-  const grandTotal = quarterStats.reduce((a,q) => a + q.totalCost, 0);
-  const grandCompounds = new Set(quarterStats.flatMap(q => [...q.selected])).size;
-  const grandVials = quarterStats.reduce((a,q) => a + q.totalVials, 0);
-  const grandWeeks = quarterStats.reduce((a,q) => a + q.weeks.length, 0);
+  // Grand total (semua 12 quarters)
+  const grandTotal = allStats.reduce((a,q) => a + q.totalCost, 0);
+  const grandCompounds = new Set(allStats.flatMap(q => [...q.selected])).size;
+  const grandVials = allStats.reduce((a,q) => a + q.totalVials, 0);
+  const grandWeeks = allStats.reduce((a,q) => a + q.weeks.length, 0);
 
-  // Card "Semua Quarter" — grand total summary
   const allCard = `<div class="ph-card sel-all" style="grid-column:1/-1">
     <div class="ph-tag" style="color:var(--acc)">
       <div class="ph-dot" style="background:var(--acc)"></div>
@@ -98,32 +100,14 @@ function renderQuarterRow(){
       <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${grandCompounds}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Total Vials</div><div class="ph-stat-v">${grandVials}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Total Weeks</div><div class="ph-stat-v">${grandWeeks}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Active Q</div><div class="ph-stat-v">${quarterStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length}</div></div>
+      <div class="ph-stat"><div class="ph-stat-l">Active Q</div><div class="ph-stat-v">${allStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length}</div></div>
     </div>
   </div>`;
 
-  // Pagination: show 4 cards starting from S.qPage. Auto-align ke S.quarter on load.
-  const PAGE_SIZE = 4;
-  let qPage = S.qPage;
-  // Pastikan S.quarter visible: kalau tidak, auto-shift
-  const curIdx = QUARTERS.indexOf(S.quarter);
-  if(curIdx >= 0 && (curIdx < qPage || curIdx >= qPage + PAGE_SIZE)){
-    qPage = Math.max(0, Math.min(QUARTERS.length - PAGE_SIZE, curIdx));
-    S.qPage = qPage;
-  }
-  const visible = quarterStats.slice(qPage, qPage + PAGE_SIZE);
+  // Render hanya 4 quarter cards yang fix
+  const visible = VISIBLE_QIDS.map(qid => allStats.find(s => s.qid === qid)).filter(Boolean);
   const maxCost = Math.max(1, ...visible.map(q => q.totalCost));
-  const canPrev = qPage > 0;
-  const canNext = qPage + PAGE_SIZE < QUARTERS.length;
 
-  // Prev/Next chevrons + page indicator
-  const navRow = `<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;font-size:11px;color:var(--t2)">
-    <button onclick="shiftQuarterPage(-1)" ${!canPrev?'disabled':''} style="padding:5px 14px;border-radius:6px;border:1.5px solid var(--bdr);background:${canPrev?'var(--bg2)':'var(--bg3)'};cursor:${canPrev?'pointer':'not-allowed'};opacity:${canPrev?'1':'.4'};font-weight:700;color:var(--t1)">‹ Prev</button>
-    <span style="font-weight:700;color:var(--t1)">Menampilkan ${quarterLabel(QUARTERS[qPage])} — ${quarterLabel(QUARTERS[Math.min(qPage+PAGE_SIZE-1,QUARTERS.length-1)])} (${qPage+1}-${Math.min(qPage+PAGE_SIZE,QUARTERS.length)}/${QUARTERS.length})</span>
-    <button onclick="shiftQuarterPage(1)" ${!canNext?'disabled':''} style="padding:5px 14px;border-radius:6px;border:1.5px solid var(--bdr);background:${canNext?'var(--bg2)':'var(--bg3)'};cursor:${canNext?'pointer':'not-allowed'};opacity:${canNext?'1':'.4'};font-weight:700;color:var(--t1)">Next ›</button>
-  </div>`;
-
-  // Card per quarter — only visible 4
   const quarterCards = visible.map(({ qid, selected, weeks, totalCost, totalVials }) => {
     const sel = S.quarter === qid;
     const pct = maxCost > 0 ? Math.round(totalCost/maxCost*100) : 0;
@@ -142,23 +126,15 @@ function renderQuarterRow(){
       <div class="ph-grid" style="grid-template-columns:1fr 1fr">
         <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${selected.size||'—'}</div></div>
         <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v" style="color:${totalVials>0?'var(--acc)':'var(--t3)'}">${totalVials||'—'}</div></div>
-        <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Biaya Vial</div><div class="ph-stat-v" style="color:${totalCost>0?'var(--acc)':'var(--t3)'};font-size:16px">${totalCost>0?rpM(totalCost):'—'}</div></div>
+        <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Total Biaya</div><div class="ph-stat-v" style="color:${totalCost>0?'var(--acc)':'var(--t3)'};font-size:16px">${totalCost>0?rpM(totalCost):'—'}</div></div>
       </div>
       <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:var(--acc)"></div></div>
     </div>`;
   }).join('');
 
-  document.getElementById('phase-row').innerHTML = allCard + navRow + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${quarterCards}</div>`;
+  document.getElementById('phase-row').innerHTML = allCard + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">${quarterCards}</div>`;
 }
 window.renderQuarterRow = renderQuarterRow;
-
-// Shift quarter pagination by delta (-1 prev, +1 next, ±4 jump)
-window.shiftQuarterPage = function(delta){
-  const PAGE_SIZE = 4;
-  const newPage = Math.max(0, Math.min(QUARTERS.length - PAGE_SIZE, S.qPage + delta * PAGE_SIZE));
-  S.qPage = newPage;
-  renderQuarterRow();
-};
 
 // ── NAV ──
 const TABS=[

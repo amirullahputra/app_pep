@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=26';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=27';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=26';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=26';
+} from './state.js?v=27';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=27';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=26';
+import * as stateModule from './state.js?v=27';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -471,13 +471,14 @@ export function pVial(){
     } else if(needed === 0){
       habisLabel = 'Belum ada cycle';
       habisCol = 'var(--t3)';
-    } else if(wte >= 56 - curWeek + 1){
-      habisLabel = 'Cukup s/d akhir';
-      habisCol = 'var(--f3)';
     } else {
-      const habisDate = weekToDateVP(curWeek + wte);
+      // Always show as DATE — bahkan kalau cukup s/d akhir protocol (W56)
+      const habisDate = weekToDateVP(Math.min(curWeek + wte, 56));
       habisLabel = fmtDateVP(habisDate);
-      habisCol = wte < 4 ? 'var(--warn)' : wte < 8 ? 'var(--f2)' : 'var(--f3)';
+      habisCol = wte >= 56 - curWeek + 1 ? 'var(--f3)'
+               : wte < 4 ? 'var(--warn)'
+               : wte < 8 ? 'var(--f2)'
+               : 'var(--f3)';
     }
     const costEst = shortage * (vs.vPrice||0);
 
