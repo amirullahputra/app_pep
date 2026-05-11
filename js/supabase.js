@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=12';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose } from './state.js?v=12';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=13';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS } from './state.js?v=13';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -149,62 +149,62 @@ export async function loadQuartersFromDB(){
   return _quartersCache;
 }
 
-// ── DECISION MATRIX STAGES (per-fase, per-user) ──
-// Table: decision_matrix_stages(id, user_id, phase_id, compound_name, stage, sort_order, ...)
+// ── DECISION MATRIX STAGES (per-quarter, per-user) ──
+// Table: decision_matrix_stages(id, user_id, quarter_id, compound_name, stage, sort_order, ...)
 // RLS: auth.uid() = user_id (FOR ALL TO authenticated)
 
-// Load semua stages user, group by phase_id → { 1: Map<name, stage>, 2: Map<...>, 3: Map<...> }
+// Load semua selection user, group by quarter_id → { 'Q3_2026': Map<name, stage>, ... }
 export async function loadDMStages(userId){
-  if(!userId) return { 1:new Map(), 2:new Map(), 3:new Map() };
+  const empty = Object.fromEntries(QUARTERS.map(q => [q, new Map()]));
+  if(!userId) return empty;
   const { data, error } = await supa.from('decision_matrix_stages')
-    .select('phase_id, compound_name, stage, sort_order')
+    .select('quarter_id, compound_name, stage, sort_order')
     .eq('user_id', userId);
   if(error){ console.error('loadDMStages:', error); throw error; }
-  const out = { 1:new Map(), 2:new Map(), 3:new Map() };
+  const out = { ...empty };
   (data||[]).forEach(r => {
-    if(!out[r.phase_id]) out[r.phase_id] = new Map();
-    out[r.phase_id].set(r.compound_name, r.stage);
+    if(!out[r.quarter_id]) out[r.quarter_id] = new Map();
+    out[r.quarter_id].set(r.compound_name, r.stage);
   });
   return out;
 }
 
-// Set stage (insert atau update kalau udah ada). UPSERT pada (user_id, phase_id, compound_name).
-export async function setDMStage(userId, phaseId, compoundName, stage){
+// Set stage. UPSERT pada (user_id, quarter_id, compound_name).
+export async function setDMStage(userId, quarterId, compoundName, stage){
   if(!userId) throw new Error('Login dulu');
   const row = {
     user_id: userId,
-    phase_id: phaseId,
+    quarter_id: quarterId,
     compound_name: compoundName,
     stage,
     updated_at: new Date().toISOString()
   };
   const { error } = await supa.from('decision_matrix_stages')
-    .upsert(row, { onConflict: 'user_id,phase_id,compound_name' });
+    .upsert(row, { onConflict: 'user_id,quarter_id,compound_name' });
   if(error){ console.error('setDMStage:', error); throw error; }
 }
 
-// Remove dari stages (kembalikan ke library)
-export async function removeDMStage(userId, phaseId, compoundName){
+// Remove
+export async function removeDMStage(userId, quarterId, compoundName){
   if(!userId) throw new Error('Login dulu');
   const { error } = await supa.from('decision_matrix_stages')
     .delete()
-    .eq('user_id', userId).eq('phase_id', phaseId).eq('compound_name', compoundName);
+    .eq('user_id', userId).eq('quarter_id', quarterId).eq('compound_name', compoundName);
   if(error){ console.error('removeDMStage:', error); throw error; }
 }
 
-// Bulk seed dari default (sport score >=60 -> watchlist). Skip duplicate via ignoreDuplicates.
-// rows: [{ compound_name, stage }]
-export async function seedDMStages(userId, phaseId, rows){
+// Bulk seed (sport >=60 → 'deal')
+export async function seedDMStages(userId, quarterId, rows){
   if(!userId || !rows?.length) return { inserted: [] };
   const payload = rows.map((r,i) => ({
     user_id: userId,
-    phase_id: phaseId,
+    quarter_id: quarterId,
     compound_name: r.compound_name,
     stage: r.stage,
     sort_order: r.sort_order ?? (100+i)
   }));
   const { data, error } = await supa.from('decision_matrix_stages')
-    .upsert(payload, { onConflict: 'user_id,phase_id,compound_name', ignoreDuplicates: true })
+    .upsert(payload, { onConflict: 'user_id,quarter_id,compound_name', ignoreDuplicates: true })
     .select();
   if(error && error.code !== '23505'){
     console.error('seedDMStages:', error); throw error;
@@ -219,18 +219,18 @@ export function showSaveInd(){
   setTimeout(()=>el.classList.remove('show'),2000);
 }
 
-// ── BUDGET DB ──
-export async function loadBudgetFromDB(ph){
+// ── BUDGET DB (per-quarter) ──
+export async function loadBudgetFromDB(qid){
   const{data:{user}}=await supa.auth.getUser();
-  if(!user){initBudSel(ph);return;}
+  if(!user){initBudSel(qid);return;}
   const{data}=await supa.from('budget_selections')
     .select('selected_compounds,budget_cap')
-    .eq('user_id',user.id).eq('phase',ph).maybeSingle();
+    .eq('user_id',user.id).eq('quarter_id',qid).maybeSingle();
   if(data){
     S.budSel=new Set(data.selected_compounds||[]);
     if(data.budget_cap)S.budCap=data.budget_cap;
   }else{
-    initBudSel(ph);
+    initBudSel(qid);
   }
 }
 
@@ -239,11 +239,11 @@ export async function saveBudgetToDB(){
   if(!user)return;
   await supa.from('budget_selections').upsert({
     user_id:user.id,
-    phase:S.budPh,
+    quarter_id:S.budQuarter,
     selected_compounds:[...S.budSel],
     budget_cap:S.budCap,
     updated_at:new Date().toISOString()
-  },{onConflict:'user_id,phase'});
+  },{onConflict:'user_id,quarter_id'});
   showSaveInd();
 }
 
@@ -524,7 +524,7 @@ export function setupAuthListener(){
     if(user){
       // Use allSettled supaya satu fail nggak block render
       await Promise.allSettled([
-        loadBudgetFromDB(S.budPh),
+        loadBudgetFromDB(S.budQuarter),
         loadCustomDoses(),
         loadInventory(),
         loadReconVials(),

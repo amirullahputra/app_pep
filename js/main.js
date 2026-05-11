@@ -21,10 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=12';
-import { S, pCost, rpM, initBudSel } from './state.js?v=12';
-import * as stateModule from './state.js?v=12';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=12';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=13';
+import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=13';
+import * as stateModule from './state.js?v=13';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=13';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -36,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=12';
+} from './supabase.js?v=13';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=12';
-import * as panelFns from './panels.js?v=12';
-import * as supaFns from './supabase.js?v=12';
+} from './panels.js?v=13';
+import * as panelFns from './panels.js?v=13';
+import * as supaFns from './supabase.js?v=13';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -56,60 +57,79 @@ function renderPanels(){
 }
 window.renderPanels = renderPanels;
 
-// ── PHASE ROW ──
-function renderPhaseRow(){
-  const max=Math.max(...PHASES.map(p=>pCost(p.id)));
-  const grandTotal=COMPOUNDS.reduce((a,c)=>a+c.c.tot.cost,0);
-  const totalVials=COMPOUNDS.reduce((a,c)=>a+(c.c.tot.v||0),0);
-  const totalCpds=COMPOUNDS.length;
+// ── QUARTER ROW ──
+// Render 12 quarter cards (Q1 2026 — Q4 2028). Card aktif highlighted.
+// Setiap card menampilkan info dinamis dari DM selection per-quarter:
+//   - jumlah compound dipilih
+//   - total cost (selected × weekly dose × harga vial)
+//   - range minggu yang fall di quarter itu (kalau ada)
+function renderQuarterRow(){
+  // Compute costs untuk semua quarters supaya bisa cari max (untuk progress bar)
+  const quarterStats = QUARTERS.map(qid => {
+    const selected = DM.selectedByQuarter[qid] || new Set();
+    const weeks = weeksInQuarter(qid);
+    let totalCost = 0, totalVials = 0;
+    selected.forEach(name => {
+      const r = costForQuarter(name, qid);
+      totalCost += r.cost;
+      totalVials += r.vials;
+    });
+    return { qid, selected, weeks, totalCost, totalVials };
+  });
+  const maxCost = Math.max(1, ...quarterStats.map(q => q.totalCost));
 
-  const allCard=`<div class="ph-card${S.ph===0?' sel-all':''}" onclick="setPhase(0)" style="grid-column:1/-1">
+  // Grand total (semua quarters)
+  const grandTotal = quarterStats.reduce((a,q) => a + q.totalCost, 0);
+  const grandCompounds = new Set(quarterStats.flatMap(q => [...q.selected])).size;
+  const grandVials = quarterStats.reduce((a,q) => a + q.totalVials, 0);
+  const grandWeeks = quarterStats.reduce((a,q) => a + q.weeks.length, 0);
+
+  // Card "Semua Quarter" — grand total summary
+  const allCard = `<div class="ph-card sel-all" style="grid-column:1/-1">
     <div class="ph-tag" style="color:var(--acc)">
       <div class="ph-dot" style="background:var(--acc)"></div>
-      ALL · W1–W56 · 56 Minggu
+      GRAND TOTAL · ${QUARTERS.length} QUARTERS (2026–2028)
     </div>
-    <div class="ph-name">Semua Fase — Grand Total Protocol</div>
-    <div class="ph-desc">Overview keseluruhan 3 fase · 56 minggu · ${totalCpds} compounds aktif</div>
+    <div class="ph-name">Multi-Quarter Protocol Overview</div>
+    <div class="ph-desc">${grandCompounds} compounds aktif (terpilih di Decision Matrix) · ${grandWeeks} minggu total dose · biaya kumulatif dari DM</div>
     <div class="ph-grid">
-      <div class="ph-stat"><div class="ph-stat-l">Total Minggu</div><div class="ph-stat-v">56</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:var(--acc)">${rpM(grandTotal)}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${totalCpds}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">F1 Cost</div><div class="ph-stat-v" style="color:var(--f1)">${rpM(pCost(1))}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">F2 Cost</div><div class="ph-stat-v" style="color:var(--f2)">${rpM(pCost(2))}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">F3 Cost</div><div class="ph-stat-v" style="color:var(--f3)">${rpM(pCost(3))}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Total Vials</div><div class="ph-stat-v">${totalVials}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">W Range</div><div class="ph-stat-v">W1–W56</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Target</div><div class="ph-stat-v">79.5→57kg</div></div>
+      <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${grandCompounds}</div></div>
+      <div class="ph-stat"><div class="ph-stat-l">Total Vials</div><div class="ph-stat-v">${grandVials}</div></div>
+      <div class="ph-stat"><div class="ph-stat-l">Total Weeks</div><div class="ph-stat-v">${grandWeeks}</div></div>
+      <div class="ph-stat"><div class="ph-stat-l">Active Q</div><div class="ph-stat-v">${quarterStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length}</div></div>
     </div>
-    <div class="ph-bar"><div class="ph-bar-fill" style="width:100%;background:linear-gradient(90deg,var(--f1) 0%,var(--f2) 50%,var(--f3) 100%)"></div></div>
   </div>`;
 
-  const phaseCards=PHASES.map(p=>{
-    const c=pCost(p.id),pct=Math.round(c/max*100),sel=S.ph===p.id;
-    const acv=COMPOUNDS.filter(cx=>(cx.c[`f${p.id}`]?.cost||0)>0).length;
-    const tv=COMPOUNDS.reduce((a,cx)=>a+(cx.c[`f${p.id}`]?.v||0),0);
-    return `<div class="ph-card${sel?' '+p.selCls:''}" onclick="setPhase(${p.id})">
-      <div class="ph-tag" style="color:${p.col}">
-        <div class="ph-dot" style="background:${p.col}"></div>
-        ${p.cls.toUpperCase()} · ${p.bf}
+  // Card per quarter — dinamis
+  const quarterCards = quarterStats.map(({ qid, selected, weeks, totalCost, totalVials }) => {
+    const sel = S.quarter === qid;
+    const pct = Math.round(totalCost/maxCost*100);
+    const hasWeeks = weeks.length > 0;
+    const wRange = hasWeeks ? `W${weeks[0]}–W${weeks[weeks.length-1]}` : '— pre-protocol';
+    const dotColor = !hasWeeks ? 'var(--t3)' : selected.size > 0 ? 'var(--acc)' : 'var(--t3)';
+    const isEmpty = selected.size === 0;
+
+    return `<div class="ph-card${sel?' sel-quarter':''}${isEmpty?' empty':''}" onclick="setQuarter('${qid}')">
+      <div class="ph-tag" style="color:${dotColor}">
+        <div class="ph-dot" style="background:${dotColor}"></div>
+        ${quarterLabel(qid).toUpperCase()}
       </div>
-      <div class="ph-name">${p.name} — ${p.label}</div>
-      <div class="ph-desc">${p.desc}</div>
-      <div class="ph-grid">
-        <div class="ph-stat"><div class="ph-stat-l">Minggu</div><div class="ph-stat-v">${p.wk}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Biaya</div><div class="ph-stat-v" style="color:${p.col}">${rpM(c)}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Active Cpd</div><div class="ph-stat-v">${acv}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Defisit</div><div class="ph-stat-v">${p.defisit}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v">${tv}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">W Range</div><div class="ph-stat-v">W${p.wS}–${p.wE}</div></div>
+      <div class="ph-name">${quarterLabel(qid)}</div>
+      <div class="ph-desc">${hasWeeks ? `${weeks.length} minggu dose · ${wRange}` : 'Pre-protocol — no doses yet'}</div>
+      <div class="ph-grid" style="grid-template-columns:1fr 1fr">
+        <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${selected.size}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Biaya</div><div class="ph-stat-v" style="color:${totalCost>0?'var(--acc)':'var(--t3)'}">${totalCost>0?rpM(totalCost):'—'}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v">${totalVials||'—'}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Weeks</div><div class="ph-stat-v">${weeks.length||'—'}</div></div>
       </div>
-      <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:${p.col}"></div></div>
+      <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:var(--acc)"></div></div>
     </div>`;
   }).join('');
 
-  document.getElementById('phase-row').innerHTML=allCard+phaseCards;
+  document.getElementById('phase-row').innerHTML = allCard + quarterCards;
 }
-window.renderPhaseRow = renderPhaseRow;
+window.renderQuarterRow = renderQuarterRow;
 
 // ── NAV ──
 const TABS=[
@@ -128,10 +148,17 @@ function renderNav(){
 }
 window.renderNav = renderNav;
 
-// ── SET PHASE / TAB ──
-function setPhase(n){S.ph=n;syncDMStages();renderPhaseRow();renderPanels();}
+// ── SET QUARTER / TAB ──
+function setQuarter(qid){
+  if(!QUARTERS.includes(qid)) return;
+  S.quarter = qid;
+  S.budQuarter = qid;  // budget tab follows main quarter
+  syncDMStages();
+  renderQuarterRow();
+  renderPanels();
+}
 function setTab(n){S.tab=n;renderNav();renderPanels();}
-window.setPhase = setPhase;
+window.setQuarter = setQuarter;
 window.setTab = setTab;
 
 // ── DECISION MATRIX — Drag & Drop Handlers (single "Selected for Fase N" zone) ──
@@ -147,7 +174,7 @@ window.onDmDragOver = function(ev){
 window.onDmDragLeave = function(ev){
   ev.currentTarget.classList.remove('drag-over');
 };
-// Drop ke "Selected" zone — add compound ke selectedByPhase[currentPhase]
+// Drop ke "Selected" zone — add compound ke selectedByQuarter[S.quarter]
 window.onDmDrop = async function(ev){
   ev.preventDefault();
   ev.currentTarget.classList.remove('drag-over');
@@ -156,89 +183,83 @@ window.onDmDrop = async function(ev){
   catch(_){ return; }
   const { name, source } = payload || {};
   if(!name) return;
-  if(source === 'selected') return;  // drag dari zone ke zone sendiri = no-op
-  const ph = S.ph;
-  if(ph === 0){ alert('Pilih Fase 1/2/3 dulu'); return; }
+  if(source === 'selected') return;
+  const qid = S.quarter;
+  if(!qid){ alert('Pilih Quarter dulu'); return; }
   if(!S.user){ alert('Login dulu untuk menyimpan Decision Matrix'); return; }
-  if(DM.selectedByPhase[ph].has(name)) return;  // sudah selected
+  if(!DM.selectedByQuarter[qid]) DM.selectedByQuarter[qid] = new Set();
+  if(DM.selectedByQuarter[qid].has(name)) return;
 
-  // Optimistic add
-  DM.selectedByPhase[ph].add(name);
+  DM.selectedByQuarter[qid].add(name);
   syncDMStages();
+  renderQuarterRow();
   renderPanels();
 
-  try { await setDMStage(S.user.id, ph, name, 'deal'); }
+  try { await setDMStage(S.user.id, qid, name, 'deal'); }
   catch(e){
     alert('Gagal simpan: '+(e.message||e));
-    DM.selectedByPhase[ph].delete(name);
+    DM.selectedByQuarter[qid].delete(name);
     syncDMStages();
+    renderQuarterRow();
     renderPanels();
   }
 };
 
-// Klik card di library untuk toggle add/remove juga (alternative to drag)
+// Klik card library untuk toggle add/remove
 window.dmToggleSelect = async function(compoundName){
-  const ph = S.ph;
-  if(ph === 0){ alert('Pilih Fase 1/2/3 dulu'); return; }
+  const qid = S.quarter;
+  if(!qid){ alert('Pilih Quarter dulu'); return; }
   if(!S.user){ alert('Login dulu untuk menyimpan Decision Matrix'); return; }
-  const isSelected = DM.selectedByPhase[ph].has(compoundName);
+  if(!DM.selectedByQuarter[qid]) DM.selectedByQuarter[qid] = new Set();
+  const isSelected = DM.selectedByQuarter[qid].has(compoundName);
   if(isSelected){
     return window.dmRemoveStage(compoundName);
   }
-  // Optimistic add
-  DM.selectedByPhase[ph].add(compoundName);
+  DM.selectedByQuarter[qid].add(compoundName);
   syncDMStages();
+  renderQuarterRow();
   renderPanels();
-  try { await setDMStage(S.user.id, ph, compoundName, 'deal'); }
+  try { await setDMStage(S.user.id, qid, compoundName, 'deal'); }
   catch(e){
     alert('Gagal simpan: '+(e.message||e));
-    DM.selectedByPhase[ph].delete(compoundName);
+    DM.selectedByQuarter[qid].delete(compoundName);
     syncDMStages();
+    renderQuarterRow();
     renderPanels();
   }
 };
 
 window.dmRemoveStage = async function(compoundName){
-  const ph = S.ph;
-  if(ph === 0) return;
+  const qid = S.quarter;
+  if(!qid) return;
   if(!S.user){ alert('Login dulu'); return; }
-  if(!DM.selectedByPhase[ph].has(compoundName)) return;
+  if(!DM.selectedByQuarter[qid]?.has(compoundName)) return;
 
-  DM.selectedByPhase[ph].delete(compoundName);
+  DM.selectedByQuarter[qid].delete(compoundName);
   syncDMStages();
+  renderQuarterRow();
   renderPanels();
 
-  try { await removeDMStage(S.user.id, ph, compoundName); }
+  try { await removeDMStage(S.user.id, qid, compoundName); }
   catch(e){
     alert('Gagal hapus: '+(e.message||e));
-    DM.selectedByPhase[ph].add(compoundName);
+    DM.selectedByQuarter[qid].add(compoundName);
     syncDMStages();
+    renderQuarterRow();
     renderPanels();
   }
 };
 
-// Load DM selections untuk user — convert DB rows ke Set per phase
+// Load DM selections untuk user — convert DB rows ke Set per quarter
 async function refreshDMStages(){
   if(!S.user) return;
   try {
     const fresh = await loadDMStages(S.user.id);
-    // fresh: { 1: Map<name, stage>, 2: Map<...>, 3: Map<...> } — convert ke Set
-    DM.selectedByPhase = {
-      1: new Set([...(fresh[1]||new Map()).keys()]),
-      2: new Set([...(fresh[2]||new Map()).keys()]),
-      3: new Set([...(fresh[3]||new Map()).keys()]),
-    };
-    // Auto-seed setiap phase yang kosong
-    for(const ph of [1, 2, 3]){
-      if(DM.selectedByPhase[ph].size === 0){
-        const seed = buildDefaultSeed();
-        if(seed.length){
-          await seedDMStages(S.user.id, ph, seed);
-          DM.selectedByPhase[ph] = new Set(seed.map(s => s.compound_name));
-          DM.seedBanner[ph] = true;
-        }
-      }
-    }
+    // fresh: { 'Q3_2026': Map<name, stage>, ... } → convert ke Set
+    DM.selectedByQuarter = Object.fromEntries(
+      QUARTERS.map(qid => [qid, new Set([...(fresh[qid] || new Map()).keys()])])
+    );
+    // No auto-seed: user requested fresh start, biarkan kosong sampai user pilih sendiri
     syncDMStages();
   } catch(e){ console.error('refreshDMStages:', e); }
 }
@@ -246,14 +267,14 @@ window.refreshDMStages = refreshDMStages;
 
 // ── BUDGET HELPERS ──
 function toggleBudSel(n){S.budSel.has(n)?S.budSel.delete(n):S.budSel.add(n);saveBudgetToDB();renderPanels();}
-async function switchBudPhase(ph){S.budPh=ph;await loadBudgetFromDB(ph);renderPanels();}
+async function switchBudQuarter(qid){S.budQuarter=qid;await loadBudgetFromDB(qid);renderPanels();}
 function toggleCat(k){
   if(S.filterCats.has(k)){if(S.filterCats.size>1)S.filterCats.delete(k);}
   else S.filterCats.add(k);
   renderPanels();
 }
 window.toggleBudSel = toggleBudSel;
-window.switchBudPhase = switchBudPhase;
+window.switchBudQuarter = switchBudQuarter;
 window.toggleCat = toggleCat;
 
 // ── DOWNLOAD ──
@@ -285,7 +306,7 @@ function getProtocolTime(){
   const totalDays=Math.floor(diffMs/(1000*60*60*24));
   const week=Math.min(Math.floor(totalDays/7)+1,56);
   const dayOfWeek=(totalDays%7)+1;
-  const phase=PHASES.find(p=>week>=p.wS&&week<=p.wE)||null;
+  const qid = quarterFromWeek(week);   // 'Q3_2026' etc.
   const weekStart=new Date(PROTOCOL_START.getTime()+(week-1)*7*24*60*60*1000);
   const weekEnd=new Date(weekStart.getTime()+6*24*60*60*1000);
 
@@ -294,7 +315,7 @@ function getProtocolTime(){
   const mins=Math.floor((nextWeekMs%(1000*60*60))/(1000*60));
   const secs=Math.floor((nextWeekMs%(1000*60))/1000);
 
-  return{belumMulai:false,week,dayOfWeek,phase,hrs,mins,secs,totalDays,done:week>56};
+  return{belumMulai:false,week,dayOfWeek,qid,hrs,mins,secs,totalDays,done:week>56};
 }
 
 function renderTimer(){
@@ -314,11 +335,11 @@ function renderTimer(){
     return;
   }
 
-  const phaseCol=t.phase?.col||'var(--acc)';
+  const qLabel = t.qid ? t.qid.replace('_',' ') : '—';
   el.innerHTML=`
-    <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:${phaseCol}">W${t.week}</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:var(--acc)">W${t.week}</div>
     <div style="width:1px;height:20px;background:var(--bdr)"></div>
-    <div style="font-size:11px;font-weight:700;color:${phaseCol}">${t.phase?.name||'—'} · Hari ${t.dayOfWeek}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--acc)">${qLabel} · Hari ${t.dayOfWeek}</div>
     <div style="width:1px;height:20px;background:var(--bdr)"></div>
     <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t2)">${String(t.hrs).padStart(2,'0')}:${String(t.mins).padStart(2,'0')}:<span style="color:var(--warn)">${String(t.secs).padStart(2,'0')}</span></div>`;
 
@@ -370,7 +391,7 @@ window.updateDebugOverlay = updateDebugOverlay;
 
   setInterval(renderTimer,1000);
   renderTimer();
-  try { renderPhaseRow(); } catch(e){ errs.push('renderPhaseRow: '+(e.message||e)); }
+  try { renderQuarterRow(); } catch(e){ errs.push('renderQuarterRow: '+(e.message||e)); }
   try { renderNav(); } catch(e){ errs.push('renderNav: '+(e.message||e)); }
   try { renderPanels(); updateDebugOverlay('rendered'); } catch(e){ errs.push('renderPanels: '+(e.message||e)); updateDebugOverlay('render FAIL: '+(e.message||e)); }
   if(errs.length) showInitError(errs.join('\n'));

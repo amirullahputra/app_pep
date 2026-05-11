@@ -1,51 +1,54 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=12';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=13';
 import {
   S, DM, _dmAllNames, dmDealt,
-  rp, rpM, pCost, totCost, totVials,
-  scCol, scSpill, stLabel, phOfW, getPrio, budEff, sportScore, getConflicts,
+  rp, rpM, totCost, totVials,
+  scCol, scSpill, stLabel, getPrio, budEff, sportScore, getConflicts,
   customDoses, inventoryCache, reconCache, getDose, isCustomDose,
   vialsConsumedRange, weeksUntilEmpty, invStatus,
-  _lastSuggested
-} from './state.js?v=12';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=12';
+  _lastSuggested,
+  QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
+} from './state.js?v=13';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=13';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=12';
+import * as stateModule from './state.js?v=13';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
 // ──────────────────────────────────────────
 export function pOverview(){
-  if(!PHASES.length||!COMPOUNDS.length) return `<div class="card" style="padding:2rem;text-align:center;color:var(--t3)">⏳ Memuat data...</div>`;
-  const ph=S.ph===0?1:S.ph;
+  if(!COMPOUNDS.length) return `<div class="card" style="padding:2rem;text-align:center;color:var(--t3)">⏳ Memuat data...</div>`;
+  const qid = S.quarter || QUARTERS[0];
+  const qLabel = quarterLabel(qid);
 
   // Tanggal aktual dari W1 = 6 Juli 2026
-  const PROTOCOL_START=new Date('2026-07-06T00:00:00');
-  const weekToDate=(w)=>{
-    const d=new Date(PROTOCOL_START);
+  const PROTOCOL_START_LOCAL = new Date('2026-07-06T00:00:00');
+  const weekToDate = (w) => {
+    const d = new Date(PROTOCOL_START_LOCAL);
     d.setDate(d.getDate()+(w-1)*7);
     return d;
   };
-  const fmtDate=(d)=>d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+  const fmtDate = (d) => d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
 
-  const cw=S.currentWeek;
-  const cwPhase=phOfW(cw);
-  const cwPhaseObj=PHASES[cwPhase-1];
-  const cwStart=weekToDate(cw);
-  const cwEnd=new Date(cwStart);cwEnd.setDate(cwEnd.getDate()+6);
+  const cw = S.currentWeek;
+  const cwQuarter = quarterFromWeek(cw);
+  const cwStart = weekToDate(cw);
+  const cwEnd = new Date(cwStart); cwEnd.setDate(cwEnd.getDate()+6);
 
-  const dealt=dmDealt();
-  const dealtFilter=dealt.size>0?(c=>dealt.has(c.name)):(()=>true);
-  const activeThisWeek=COMPOUNDS.filter(c=>{
-    const dose=getDose(c.name,cw);
-    return dose!=null&&dose>0&&dealtFilter(c);
-  }).map(c=>({...c,dose:getDose(c.name,cw),unit:VSPECS[c.name]?.unit||'mg',prio:getPrio(c.name,cwPhase)}))
-    .sort((a,b)=>b.prio-a.prio);
+  const dealt = dmDealt();   // Set compound names di quarter aktif
+  const dealtFilter = dealt.size > 0 ? (c => dealt.has(c.name)) : (()=>true);
 
-  const weekCard=`
+  const activeThisWeek = COMPOUNDS.filter(c => {
+    const dose = getDose(c.name, cw);
+    return dose != null && dose > 0 && dealtFilter(c);
+  }).map(c => ({...c, dose:getDose(c.name,cw), unit:VSPECS[c.name]?.unit||'mg', prio:getPrio(c.name,qid)}))
+    .sort((a,b) => b.prio-a.prio);
+
+  // Week card — dose minggu ini
+  const weekCard = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:6px">
         <button onclick="if(S.currentWeek>1){S.currentWeek--;renderPanels();}" style="width:26px;height:26px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);flex-shrink:0">‹</button>
@@ -56,114 +59,102 @@ export function pOverview(){
         <button onclick="if(S.currentWeek<56){S.currentWeek++;renderPanels();}" style="width:26px;height:26px;border-radius:6px;border:1.5px solid var(--bdr2);background:var(--bg2);cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);flex-shrink:0">›</button>
       </div>
       <div style="flex:1;padding-left:8px;border-left:1px solid var(--bdr)">
-        <div style="font-size:11px;font-weight:800;color:${cwPhaseObj.col}">${cwPhaseObj.name} · ${cwPhaseObj.bf}</div>
-        <div style="font-size:10px;color:var(--t2)">${cwPhaseObj.label} · Defisit ${cwPhaseObj.defisit}</div>
+        <div style="font-size:11px;font-weight:800;color:var(--acc)">${cwQuarter ? quarterLabel(cwQuarter) : '— pre-protocol'}</div>
+        <div style="font-size:10px;color:var(--t2)">Week ${cw} dari 56</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:${cwPhaseObj.col}">${activeThisWeek.length}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--acc)">${activeThisWeek.length}</div>
         <div style="font-size:9px;color:var(--t2)">compound aktif</div>
       </div>
     </div>
     <div style="height:1px;background:var(--bdr);margin-bottom:8px"></div>
-    ${activeThisWeek.length===0
-      ?'<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Tidak ada compound aktif minggu ini</div>'
-      :activeThisWeek.map(c=>{
-        const st=stLabel(c.prio);
-        const isCustom=isCustomDose(c.name,cw);
-        return`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
-          <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}${isCustom?'<span style="color:var(--hor);font-size:9px;margin-left:3px">✎</span>':''}</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;width:60px;text-align:right">${c.dose}${c.unit}</div>
-          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
-        </div>`;
-      }).join('')
+    ${activeThisWeek.length === 0
+      ? '<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Tidak ada compound aktif minggu ini</div>'
+      : activeThisWeek.map(c => {
+          const st = stLabel(c.prio);
+          const isCustom = isCustomDose(c.name, cw);
+          return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">
+            <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
+            <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}${isCustom?'<span style="color:var(--hor);font-size:9px;margin-left:3px">✎</span>':''}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;width:60px;text-align:right">${c.dose}${c.unit}</div>
+            <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
+          </div>`;
+        }).join('')
     }`;
 
-  // Biaya per kategori
-  const cc={};Object.keys(CAT).forEach(k=>cc[k]=0);
-  if(S.ph===0){COMPOUNDS.forEach(c=>cc[c.cat]+=totCost(c));}
-  else{COMPOUNDS.forEach(c=>cc[c.cat]+=(c.c[`f${S.ph}`]?.cost||0));}
-  const mxcc=Math.max(...Object.values(cc),1);
-  const catBars=Object.entries(cc).filter(([,v])=>v>0).map(([k,v])=>`
+  // Biaya per kategori (quarter aktif, dari DM-selected only)
+  const cc = {}; Object.keys(CAT).forEach(k => cc[k] = 0);
+  COMPOUNDS.filter(dealtFilter).forEach(c => {
+    cc[c.cat] += costForQuarter(c.name, qid).cost;
+  });
+  const mxcc = Math.max(...Object.values(cc), 1);
+  const catBars = Object.entries(cc).filter(([,v]) => v > 0).map(([k,v]) => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <span class="lb ${CAT[k].cls}" style="font-size:8px;min-width:62px;text-align:center;flex-shrink:0">${CAT[k].n}</span>
       <div style="flex:1;height:16px;background:var(--bg3);border-radius:4px;overflow:hidden">
         <div style="width:${v/mxcc*100}%;height:100%;background:${CAT[k].col};border-radius:4px"></div>
       </div>
       <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);flex-shrink:0;min-width:68px;text-align:right">${rpM(v)}</div>
-    </div>`).join('');
+    </div>`).join('') || '<div style="color:var(--t3);font-size:11px;padding:10px 0">Belum ada compound dipilih di Decision Matrix untuk quarter ini</div>';
 
-  // Distribusi biaya total
-  const f1c=pCost(1),f2c=pCost(2),f3c=pCost(3),tot=f1c+f2c+f3c;
-  const costBar=`
-    <div style="height:12px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:6px">
-      <div style="flex:${f1c/tot};background:var(--f1)"></div>
-      <div style="flex:${f2c/tot};background:var(--f2)"></div>
-      <div style="flex:${f3c/tot};background:var(--f3)"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between">${PHASES.map(p=>`
-      <div style="font-size:10px;font-weight:700;color:${p.col}">● ${p.name}<br><span style="font-family:'JetBrains Mono',monospace">${rpM(pCost(p.id))}</span></div>`).join('')}
-    </div>`;
-
-  // Semua compound aktif di fase — filter by dmDealt() + prio > 0
-  const phaseActive=[...COMPOUNDS]
+  // Compound list aktif di quarter (sorted by prio)
+  const quarterActive = [...COMPOUNDS]
     .filter(dealtFilter)
-    .map(c=>({...c,prio:S.ph===0?Math.round((getPrio(c.name,1)+getPrio(c.name,2)+getPrio(c.name,3))/3):getPrio(c.name,ph)}))
-    .filter(c=>c.prio>0)
-    .sort((a,b)=>b.prio-a.prio);
-  const maxPrio=phaseActive[0]?.prio||100;
+    .map(c => ({ ...c, prio: getPrio(c.name, qid) }))
+    .sort((a,b) => b.prio - a.prio);
+  const maxPrio = quarterActive[0]?.prio || 100;
+
+  // Recap vial untuk quarter
+  const vialRecap = quarterActive.map(c => {
+    const r = costForQuarter(c.name, qid);
+    return { name: c.name, cat: c.cat, vials: r.vials, cost: r.cost };
+  }).filter(r => r.vials > 0).sort((a,b) => b.vials - a.vials);
+  const maxV = Math.max(1, ...vialRecap.map(r => r.vials));
+  const totalV = vialRecap.reduce((a,r) => a + r.vials, 0);
+  const totalCost = vialRecap.reduce((a,r) => a + r.cost, 0);
 
   return `
   <div class="grid2" style="margin-bottom:12px">
     <div class="card">
-      <div class="card-title"><span class="ico">💉</span> Compound Aktif Minggu Ini</div>
+      <div class="card-title"><span class="ico">💉</span> Compound Aktif Minggu Ini · W${cw}</div>
       ${weekCard}
     </div>
     <div class="card">
-      <div class="card-title"><span class="ico">💸</span> Distribusi Biaya</div>
-      ${costBar}
-      <div class="sep"></div>
-      <div class="card-title"><span class="ico">📊</span> Biaya per Kategori — ${S.ph===0?'Semua Fase':'Fase '+ph}</div>
+      <div class="card-title"><span class="ico">📊</span> Biaya per Kategori — ${qLabel}</div>
       ${catBars}
     </div>
   </div>
   <div class="grid2">
     <div class="card">
-      <div class="card-title"><span class="ico">🏆</span> Semua Compound Aktif — ${S.ph===0?'Rata-rata Semua Fase':'Fase '+ph} (${phaseActive.length} aktif)</div>
-      ${phaseActive.map((c,i)=>{const st=stLabel(c.prio);return`
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <div style="font-size:9px;color:var(--t3);width:14px;flex-shrink:0;text-align:right">${i+1}</div>
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
-          <div style="font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;width:110px">${c.name}</div>
-          <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden">
-            <div style="width:${Math.round(c.prio/maxPrio*100)}%;height:100%;background:${scCol(c.prio)};border-radius:3px"></div>
-          </div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;width:26px;text-align:right">${c.prio}</div>
-          <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
-        </div>`;}).join('')}
+      <div class="card-title"><span class="ico">🏆</span> Compound Selected — ${qLabel} (${quarterActive.length} aktif)</div>
+      ${quarterActive.length === 0
+        ? '<div style="color:var(--t3);font-size:11px;padding:14px 0;text-align:center">Belum ada compound dipilih untuk quarter ini. <button onclick="setTab(2)" style="background:var(--acc);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-weight:700;cursor:pointer;margin-left:8px">Buka Decision Matrix →</button></div>'
+        : quarterActive.map((c,i) => { const st = stLabel(c.prio); return `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+            <div style="font-size:9px;color:var(--t3);width:14px;flex-shrink:0;text-align:right">${i+1}</div>
+            <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
+            <div style="font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;width:110px">${c.name}</div>
+            <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden">
+              <div style="width:${Math.round(c.prio/maxPrio*100)}%;height:100%;background:${scCol(c.prio)};border-radius:3px"></div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;width:26px;text-align:right">${c.prio}</div>
+            <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
+          </div>`; }).join('')
+      }
     </div>
     <div class="card">
-      <div class="card-title"><span class="ico">📦</span> Recap Kebutuhan Vial — ${S.ph===0?'Semua Fase':'Fase '+ph}</div>
-      ${(()=>{
-        const rows=S.ph===0
-          ?COMPOUNDS.filter(c=>totVials(c)>0).sort((a,b)=>totVials(b)-totVials(a))
-          :COMPOUNDS.filter(c=>(c.c[`f${ph}`]?.v||0)>0).sort((a,b)=>(b.c[`f${ph}`]?.v||0)-(a.c[`f${ph}`]?.v||0));
-        const maxV=Math.max(...rows.map(c=>S.ph===0?totVials(c):(c.c[`f${ph}`]?.v||0)),1);
-        const totalV=rows.reduce((a,c)=>a+(S.ph===0?totVials(c):(c.c[`f${ph}`]?.v||0)),0);
-        const totalCost=rows.reduce((a,c)=>a+(S.ph===0?totCost(c):(c.c[`f${ph}`]?.cost||0)),0);
-        return rows.map(c=>{
-          const v=S.ph===0?totVials(c):(c.c[`f${ph}`]?.v||0);
-          const cost=S.ph===0?totCost(c):(c.c[`f${ph}`]?.cost||0);
-          const vs=VSPECS[c.name];
-          return`<div class="srow">
-            <div class="srow-lbl" style="width:130px"><span class="lb ${CAT[c.cat].cls}" style="font-size:8px">${CAT[c.cat].n}</span> ${c.name}</div>
-            <div class="srow-bar"><div class="srow-fill" style="width:${v/maxV*100}%;background:${CAT[c.cat].col}"></div></div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);min-width:55px;text-align:right">${v} vial</div>
-          </div>`;
-        }).join('')+`<div style="border-top:2px solid var(--bdr2);margin-top:8px;padding-top:8px;display:flex;justify-content:flex-end">
-          <span style="font-size:11px;font-weight:800;color:var(--t1)">Total: <span style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${totalV} vial</span></span>
-        </div>`;
-      })()}
+      <div class="card-title"><span class="ico">📦</span> Kebutuhan Vial — ${qLabel}</div>
+      ${vialRecap.length === 0
+        ? '<div style="color:var(--t3);font-size:11px;padding:14px 0">Tidak ada vial dibutuhkan untuk quarter ini.</div>'
+        : vialRecap.map(r => `<div class="srow">
+            <div class="srow-lbl" style="width:130px"><span class="lb ${CAT[r.cat].cls}" style="font-size:8px">${CAT[r.cat].n}</span> ${r.name}</div>
+            <div class="srow-bar"><div class="srow-fill" style="width:${r.vials/maxV*100}%;background:${CAT[r.cat].col}"></div></div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);min-width:55px;text-align:right">${r.vials} vial</div>
+          </div>`).join('') + `<div style="border-top:2px solid var(--bdr2);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between">
+            <span style="font-size:11px;font-weight:800;color:var(--t1)">Total Cost: <span style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${rpM(totalCost)}</span></span>
+            <span style="font-size:11px;font-weight:800;color:var(--t1)">Total: <span style="font-family:'JetBrains Mono',monospace;color:var(--acc)">${totalV} vial</span></span>
+          </div>`
+      }
     </div>
   </div>`;
 }
@@ -246,20 +237,20 @@ export function dmToggleAll(){
 export function dmSetFilter(key,val){DM[key]=val;window.renderPanels();}
 export function dmUpdateSummary(){window.renderPanels();}
 
-// ── pDecision — Drag-Drop Builder (Library + Selected zone per fase) ──
+// ── pDecision — Drag-Drop Builder (Library + Selected zone per quarter) ──
 export function pDecision(){
-  const ph = S.ph;
+  const qid = S.quarter;
 
-  // Fase 0 = "Semua Fase" → tidak bisa edit, suruh pilih fase
-  if(ph === 0){
+  if(!qid){
     return `<div class="card">
       <div class="card-title"><span class="ico">🎯</span> Decision Matrix</div>
-      <div class="dm-phase-prompt">Pilih Fase 1, 2, atau 3 di atas untuk mulai edit decision matrix.</div>
+      <div class="dm-phase-prompt">Pilih Quarter di atas untuk mulai edit decision matrix.</div>
     </div>`;
   }
 
-  const selectedSet = DM.selectedByPhase[ph] || new Set();
-  const showSeedBanner = DM.seedBanner[ph];
+  const selectedSet = DM.selectedByQuarter[qid] || new Set();
+  const showSeedBanner = DM.seedBanner[qid];
+  const qLabel = quarterLabel(qid);
 
   const sportScoreOf = (name) => {
     const s = SP[name];
@@ -271,8 +262,8 @@ export function pDecision(){
     const inLib = source === 'library';
     const inSelected = source === 'selected';
     const sportScore = sportScoreOf(c.name);
-    const cost = c.c[`f${ph}`]?.cost || 0;
-    const costStr = cost > 0 ? rpM(cost) : '—';
+    const costInfo = costForQuarter(c.name, qid);
+    const costStr = costInfo.cost > 0 ? rpM(costInfo.cost) : '—';
     const isSelected = selectedSet.has(c.name);
     const dimClass = inLib && isSelected ? ' in-stage' : '';
     const clickHandler = inLib
@@ -334,7 +325,7 @@ export function pDecision(){
       ondragleave="onDmDragLeave(event)"
       ondrop="onDmDrop(event)">
       <div class="dm-zone-hdr">
-        <span>✅ Selected for Fase ${ph}</span>
+        <span>✅ Selected for ${qLabel}</span>
         <span class="dm-zone-cnt">${selectedCompounds.length}</span>
       </div>
       ${selectedCompounds.length === 0
@@ -346,12 +337,12 @@ export function pDecision(){
   const seedBannerHtml = showSeedBanner ? `
     <div class="dm-seed-banner">
       <span style="flex:1">💡 Auto-seeded compounds dengan sport score ≥60. Edit sesuai kebutuhan.</span>
-      <button onclick="DM.seedBanner[${ph}]=false;renderPanels()">Tutup</button>
+      <button onclick="DM.seedBanner['${qid}']=false;renderPanels()">Tutup</button>
     </div>` : '';
 
   return `
   <div class="card">
-    <div class="card-title"><span class="ico">🎯</span> Decision Matrix — Fase ${ph}</div>
+    <div class="card-title"><span class="ico">🎯</span> Decision Matrix — ${qLabel}</div>
     ${seedBannerHtml}
     <div class="dm-2col">
       ${libraryHtml}
@@ -367,7 +358,7 @@ export function pDecision(){
 // ──────────────────────────────────────────
 export function pVial(){
   const curWeek=S.currentWeek||1;
-  const ph=S.ph===0?1:S.ph;
+  const qid = S.quarter || QUARTERS[0];
   const today=new Date();
   const vt=S.vialTab||'stok';
 
@@ -683,9 +674,13 @@ export function pTimeline(){
       const isCustom=isCustomDose(c.name,w);
       const hasAnyDose=defaultDose||activeDose;
       if(!hasAnyDose)return`<div class="g-cell g-off" onclick="openDoseEdit('${c.name}',${w})" title="W${w}: OFF · Klik untuk set dose"></div>`;
-      const ph2=phOfW(w),prio=getPrio(c.name,ph2),wajib=prio>=60;
-      const dispDose=activeDose??defaultDose;
-      return`<div class="g-cell g-${ph2}${wajib?' w':''}${isCustom?' g-custom':''}" onclick="openDoseEdit('${c.name}',${w})" title="${c.name} W${w}: ${dispDose}${unit}${isCustom?' ✎Custom':''} · Prio F${ph2}: ${prio} · Klik untuk edit"></div>`;
+      const qid2 = quarterFromWeek(w);
+      const prio = getPrio(c.name, qid2);
+      const wajib = prio>=60;
+      const dispDose = activeDose ?? defaultDose;
+      // gantt color tier by quarter-year (just first digit of quarter num)
+      const qNum = qid2 ? parseInt(qid2.charAt(1)) : 1;
+      return `<div class="g-cell g-${qNum}${wajib?' w':''}${isCustom?' g-custom':''}" onclick="openDoseEdit('${c.name}',${w})" title="${c.name} W${w}: ${dispDose}${unit}${isCustom?' ✎Custom':''} · ${qid2?quarterLabel(qid2):'—'} · Prio: ${prio} · Klik untuk edit"></div>`;
     }).join('');
     const hasCustom=Object.keys(customDoses[c.name]||{}).length>0;
     return`<div class="g-row">
@@ -709,27 +704,25 @@ export function pTimeline(){
 // P4 — BUDGET + CONFLICT
 // ──────────────────────────────────────────
 export function pBudget(){
-  const ph=S.budPh,phKey=`f${ph}`;
-  const cap=S.budCap;
-  const phCol={1:'var(--f1)',2:'var(--f2)',3:'var(--f3)'};
+  const qid = S.budQuarter || S.quarter;
+  const cap = S.budCap;
+  const qLabel = quarterLabel(qid);
 
-  // Filter by Decision Matrix selection untuk fase ini.
-  // Source of truth: hanya compound yang sudah dipilih di Decision Matrix
-  // yang muncul di Budget tab.
-  const dmSelected = DM.selectedByPhase[ph] || new Set();
+  // Filter by Decision Matrix selection untuk quarter ini.
+  const dmSelected = DM.selectedByQuarter[qid] || new Set();
 
-  // Empty state: DM Fase X belum punya selection
+  // Empty state: DM Quarter X belum punya selection
   if(dmSelected.size === 0){
     return `
     <div class="card">
-      <div class="card-title"><span class="ico">💰</span> Budget + Conflict — Fase ${ph}</div>
-      <div class="ph-toggle-row" style="margin-bottom:16px">
-        <span style="font-size:10px;color:var(--t2);font-weight:700">Fase:</span>
-        ${PHASES.map(p=>`<button class="ph-tgl${S.budPh===p.id?' t'+p.cls:''}" onclick="switchBudPhase(${p.id})">${p.name}</button>`).join('')}
+      <div class="card-title"><span class="ico">💰</span> Budget + Conflict — ${qLabel}</div>
+      <div class="ph-toggle-row" style="margin-bottom:16px;flex-wrap:wrap;gap:4px">
+        <span style="font-size:10px;color:var(--t2);font-weight:700">Quarter:</span>
+        ${QUARTERS.map(q=>`<button class="ph-tgl${qid===q?' tacc':''}" onclick="switchBudQuarter('${q}')">${quarterLabel(q)}</button>`).join('')}
       </div>
       <div style="padding:2rem;text-align:center;color:var(--t3);font-size:13px;line-height:1.6">
         <div style="font-size:32px;margin-bottom:8px">🎯</div>
-        <div>Belum ada compound dipilih untuk <b>Fase ${ph}</b> di Decision Matrix.</div>
+        <div>Belum ada compound dipilih untuk <b>${qLabel}</b> di Decision Matrix.</div>
         <div style="margin-top:8px;font-size:11px">Pilih compound di Decision Matrix dulu, baru bisa hitung budget.</div>
         <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(2)">Buka Decision Matrix →</button>
       </div>
@@ -738,7 +731,10 @@ export function pBudget(){
 
   const sorted=[...COMPOUNDS]
     .filter(c=>dmSelected.has(c.name))
-    .map(c=>({...c,prio:getPrio(c.name,ph),cost:c.c[phKey]?.cost||0,eff:budEff(c.name,ph),ss:sportScore(c.name)}))
+    .map(c=>{
+      const ci = costForQuarter(c.name, qid);
+      return { ...c, prio: getPrio(c.name, qid), cost: ci.cost, eff: budEff(c.name, qid), ss: sportScore(c.name) };
+    })
     .sort((a,b)=>b.prio-a.prio);
 
   // Auto-prune S.budSel ke subset dari DM-selected (hapus phantom dari fase lain)
@@ -801,27 +797,27 @@ export function pBudget(){
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px">
       <span>Rp 5 jt</span><span>Rp 200 jt</span>
     </div>
-    <div class="ph-toggle-row">
-      <span style="font-size:10px;color:var(--t2);font-weight:700">Fase:</span>
-      ${PHASES.map(p=>`<button class="ph-tgl${S.budPh===p.id?' t'+p.cls:''}" onclick="switchBudPhase(${p.id})">${p.name}</button>`).join('')}
+    <div class="ph-toggle-row" style="flex-wrap:wrap;gap:4px">
+      <span style="font-size:10px;color:var(--t2);font-weight:700">Quarter:</span>
+      ${QUARTERS.map(q=>`<button class="ph-tgl${qid===q?' tacc':''}" onclick="switchBudQuarter('${q}')">${quarterLabel(q)}</button>`).join('')}
       <button class="auto-btn" onclick="autoPickBudget()">✨ Auto Pilih Optimal</button>
     </div>
   </div>
 
   <div class="bud-progress">
     <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:${phCol[ph]}">${rpM(selCost)}</span> · ${selCount} compounds</span>
+      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:var(--acc)">${rpM(selCost)}</span> · ${selCount} compounds</span>
       <span style="font-size:12px;font-weight:700;color:var(--t1)">Sisa: <span style="color:${over?'var(--warn)':'var(--f3)'}">${over?'OVER BUDGET':rpM(cap-selCost)}</span></span>
     </div>
-    <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':phCol[ph]}"></div></div>
-    <div style="font-size:10px;color:var(--t2);margin-top:3px">${selPct}% dari cap · Fase ${ph}</div>
+    <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':'var(--acc)'}"></div></div>
+    <div style="font-size:10px;color:var(--t2);margin-top:3px">${selPct}% dari cap · ${qLabel}</div>
   </div>
 
   ${cBanner}
 
   <div class="grid2">
     <div class="card">
-      <div class="card-title"><span class="ico">💰</span> Pilih Compound — Fase ${ph}</div>
+      <div class="card-title"><span class="ico">💰</span> Pilih Compound — ${qLabel}</div>
       ${cmpRows}
       <div class="note">Centang untuk include. Conflict langsung terdeteksi real-time. Auto Pilih = greedy by Priority Score sampai budget habis.</div>
     </div>
@@ -834,7 +830,7 @@ export function pBudget(){
         ${redAlerts}
       </div>
       <div class="card">
-        <div class="card-title"><span class="ico">⚡</span> Top Budget Efficiency — Fase ${ph}</div>
+        <div class="card-title"><span class="ico">⚡</span> Top Budget Efficiency — ${qLabel}</div>
         ${effRanking.map(c=>{const sel=S.budSel.has(c.name);return`<div class="srow" style="${sel?'':'opacity:.4'}">
           <div class="srow-lbl">${c.name}</div>
           <div class="srow-bar"><div class="srow-fill" style="width:${Math.min(100,c.eff*5)}%;background:${c.eff>=10?'var(--f3)':c.eff>=5?'var(--f2)':'var(--f1)'}"><span class="srow-txt">${c.eff}x</span></div></div>
@@ -850,7 +846,7 @@ export function pBudget(){
 // P5 — COMPOUNDS
 // ──────────────────────────────────────────
 export function pCompounds(){
-  const ph=S.ph;
+  const qid = S.quarter || QUARTERS[0];
   const allDims={z2:0,pw:0,rc:0,hr:0,cn:0};
   COMPOUNDS.forEach(c=>{const s=SP[c.name];if(s)Object.keys(allDims).forEach(k=>allDims[k]+=s[k])});
   const maxD=Math.max(...Object.values(allDims));
@@ -891,7 +887,7 @@ export function pCompounds(){
   const cards=filtered.map(c=>{
     const sc=SC[c.name]||{},sp=SP[c.name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
     const f1=sc.f1||{r:0,p:0},f2=sc.f2||{r:0,p:0},f3=sc.f3||{r:0,p:0};
-    const ss=sportScore(c.name),eff=budEff(c.name,ph),cost=c.c[`f${ph}`]?.cost||0;
+    const ss=sportScore(c.name),eff=budEff(c.name,qid),cost=costForQuarter(c.name,qid).cost;
     const pips=(v)=>Array.from({length:5},(_,i)=>`<div class="pip ${i<v?'pip-on':'pip-off'}"></div>`).join('');
     return`<div class="cmp-card">
       <div class="cmp-hdr">
