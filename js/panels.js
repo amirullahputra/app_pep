@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=25';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=26';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=25';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=25';
+} from './state.js?v=26';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=26';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=25';
+import * as stateModule from './state.js?v=26';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -410,15 +410,25 @@ export function pVial(){
     </div>
   </div>`;
 
-  // ── DOSE SCHEDULE BANNER (schema v2 — doses_jsonb dropped) ──
-  const doseSchedBanner = `
-  <div class="conflict-banner cb-warn" style="margin-bottom:12px">
-    <div class="cb-ico">⏳</div>
-    <div>
-      <div class="cb-title">Forecast vial pakai dose schedule yang belum di-input</div>
-      <div style="font-size:11px;color:var(--t1)">Schema v2: dose per-week akan di-input manual via tab <b>Timeline</b> (UI sedang di-build). Sampai itu, kolom "weeks until empty" dan "vial needed forecast" akan tampil 0/—. Inventory manual tracking di tab Stok/Rekon tetap jalan normal.</div>
-    </div>
-  </div>`;
+  // PROTOCOL_START local untuk date calc
+  const PROTOCOL_START_LOCAL_VP = new Date('2026-07-06T00:00:00');
+  const weekToDateVP = (w) => {
+    const d = new Date(PROTOCOL_START_LOCAL_VP);
+    d.setDate(d.getDate() + (w-1)*7);
+    return d;
+  };
+  const fmtDateVP = (d) => d.toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
+
+  // Total vial dibutuhkan untuk compound across all DM quarters
+  const totalVialsNeeded = (c) => {
+    let total = 0;
+    QUARTERS.forEach(qid => {
+      if(DM.selectedByQuarter[qid]?.has(c.name)){
+        total += tlCostForQuarter(c, qid).vials;
+      }
+    });
+    return total;
+  };
 
   // ── TAB SWITCHER ──
   const noDealBanner=noDeal?`
@@ -449,15 +459,27 @@ export function pVial(){
     const vs=VSPECS[c.name]||{vPrice:0,label:'—',vSize:1,unit:'mg'};
     const inv=inventoryCache[c.name]||{qty:0,safetyStock:5};
     const st=invStatus(c.name);
-    const tv=totVials(c);
-    const consumed=vialsConsumedRange(c,1,curWeek-1);
-    const remaining=Math.max(0,tv-consumed);
-    const wte=weeksUntilEmpty(c,curWeek);
-    const wteLabel=inv.qty===0?'—':(wte>=56-curWeek+1?'Cukup s/d akhir':`~W${curWeek+wte}`);
-    const wteCol=inv.qty===0?'var(--t3)':wte<4?'var(--warn)':wte<8?'var(--f2)':'var(--f3)';
-    const needTotal=Math.max(remaining,1);
-    const haveRatio=Math.min(1,inv.qty/needTotal);
-    const ssRatio=Math.min(1,inv.safetyStock/needTotal);
+    const needed = totalVialsNeeded(c);  // total vial dibutuhkan across all DM quarters
+    const shortage = Math.max(0, needed - inv.qty);  // berapa vial yg masih kurang
+    const wte = weeksUntilEmpty(c, curWeek);
+    // Estimasi habis as DATE
+    let habisLabel = '—';
+    let habisCol = 'var(--t3)';
+    if(inv.qty === 0){
+      habisLabel = 'Stok kosong';
+      habisCol = 'var(--warn)';
+    } else if(needed === 0){
+      habisLabel = 'Belum ada cycle';
+      habisCol = 'var(--t3)';
+    } else if(wte >= 56 - curWeek + 1){
+      habisLabel = 'Cukup s/d akhir';
+      habisCol = 'var(--f3)';
+    } else {
+      const habisDate = weekToDateVP(curWeek + wte);
+      habisLabel = fmtDateVP(habisDate);
+      habisCol = wte < 4 ? 'var(--warn)' : wte < 8 ? 'var(--f2)' : 'var(--f3)';
+    }
+    const costEst = shortage * (vs.vPrice||0);
 
     return`<tr onclick="openInvEdit('${c.name}')" style="cursor:pointer">
       <td><span class="lb ${CAT[c.cat].cls}">${CAT[c.cat].n}</span></td>
@@ -466,29 +488,20 @@ export function pVial(){
         <div style="font-size:10px;color:var(--t3)">${vs.label}</div>
       </td>
       <td class="c">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:${needed>0?'var(--acc)':'var(--t3)'}">${needed||'—'}</div>
+        <div style="font-size:9px;color:var(--t3)">vial protokol</div>
+        ${shortage>0?`<div style="font-size:9px;color:var(--warn);font-weight:700;margin-top:2px">kurang ${shortage}v</div>`:''}
+      </td>
+      <td class="c">
         <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;background:${st.col}22;color:${st.col};border:1px solid ${st.col}44">${st.label}</span>
       </td>
       <td class="c">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:${st.col}">${inv.qty}</div>
-        <div style="font-size:9px;color:var(--t3)">vial on hand</div>
-      </td>
-      <td class="c">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--t2)">${inv.safetyStock}</div>
-        <div style="font-size:9px;color:var(--t3)">min order</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${st.col}">${inv.qty}<span style="font-size:10px;color:var(--t3);font-weight:600">/${inv.safetyStock}</span></div>
+        <div style="font-size:9px;color:var(--t3)">stok / min order</div>
       </td>
       <td>
-        <div style="width:100%;height:8px;border-radius:4px;background:var(--bg3);position:relative;overflow:hidden;margin-bottom:3px">
-          <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(haveRatio*100)}%;background:${st.col};border-radius:4px"></div>
-          <div style="position:absolute;left:${Math.round(ssRatio*100)}%;top:0;height:100%;width:2px;background:var(--f2);opacity:.9"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between">
-          <span style="font-size:9px;color:var(--t3)">sisa butuh ${remaining}v</span>
-          <span style="font-size:9px;color:var(--t3)">protokol ${tv}v</span>
-        </div>
-      </td>
-      <td>
-        <div style="font-size:11px;font-weight:700;color:${wteCol}">${wteLabel}</div>
-        <div style="font-size:9px;color:var(--t3)">${rp(vs.vPrice)}/vial</div>
+        <div style="font-size:12px;font-weight:800;color:${habisCol}">${habisLabel}</div>
+        <div style="font-size:9px;color:var(--t3)">${rp(vs.vPrice)}/vial${shortage>0?` · belanja: ${rpM(costEst)}`:''}</div>
       </td>
     </tr>`;
   }).join('');
@@ -504,17 +517,16 @@ export function pVial(){
         <thead><tr style="position:sticky;top:0;background:var(--bg1);z-index:2">
           <th>Layer</th>
           <th>Compound</th>
+          <th class="c">Kebutuhan</th>
           <th class="c">Status</th>
-          <th class="c">Stok (vial)</th>
-          <th class="c">Min Order</th>
-          <th>Stok vs Kebutuhan Protokol</th>
+          <th class="c">Stok / Min Order</th>
           <th>Estimasi Habis</th>
         </tr></thead>
         <tbody>${stokRows}</tbody>
       </table>
     </div>
     <div class="note" style="margin-top:8px">
-      Bar hijau = stok saat ini · Garis kuning = safety stock · <span style="color:var(--f3);font-weight:700">AMAN</span> stok > min order · <span style="color:var(--f2);font-weight:700">ORDER</span> stok ≤ min order · <span style="color:var(--warn);font-weight:700">KOSONG</span> = 0 vial
+      <b>Kebutuhan</b> = total vial dipakai sepanjang protokol (dari Timeline cycle + DM selection). <b>Estimasi Habis</b> = tanggal real stok mentok ke 0 (kalkulasi pakai dose per minggu). <span style="color:var(--f3);font-weight:700">AMAN</span> stok > min order · <span style="color:var(--f2);font-weight:700">ORDER</span> stok ≤ min order · <span style="color:var(--warn);font-weight:700">KOSONG</span> = 0 vial.
     </div>
   </div>`;
 
@@ -603,7 +615,6 @@ export function pVial(){
   </div>`;
 
   return`
-  ${doseSchedBanner}
   ${summaryBar}
   ${tabBar}
   ${vt==='stok'?stokPanel:reconPanel}
@@ -750,6 +761,7 @@ export function pTimeline(){
         <div class="tl-cycle-input">
           ON:<input type="number" min="0" max="${weeks.length}" value="${cycle.on||''}" onchange="tlSetOn('${qid}','${escName}',this.value)" placeholder="0">
           OFF:<input type="number" min="0" max="${weeks.length}" value="${cycle.off||''}" onchange="tlSetOff('${qid}','${escName}',this.value)" placeholder="0">
+          START:<input type="number" min="1" max="${weeks.length}" value="${cycle.start||1}" onchange="tlSetStart('${qid}','${escName}',this.value)" placeholder="1" title="Week ke berapa di quarter ini cycle mulai (1=W1 quarter ini)">
         </div>
       </div>
       <div class="tl-cells">${cells}</div>

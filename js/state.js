@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=25';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=26';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -92,6 +92,7 @@ export let S={
   filterCats: new Set(Object.keys(CAT)),
   search: '',
   user: null,
+  qPage: 0,   // Quarter row pagination start index (0-based)
 };
 
 // Sumber S.budSel default: semua compound yang punya cost>0 di quarter aktif
@@ -190,9 +191,24 @@ export function weeksUntilEmpty(c,curWeek){
   if(remaining<=0)return 0;
   const vs=VSPECS[c.name];
   const mgPerVial=vs?.vSize||1;
+  // Loop through future weeks, pakai tlDoseForWeek (handle cycle + custom doses)
   for(let w=curWeek;w<=56;w++){
-    const d=getDose(c.name,w);
-    if(d){remaining-=d/mgPerVial;if(remaining<0)return w-curWeek;}
+    // Custom dose check first
+    const custom = customDoses[c.name]?.[w];
+    let d = 0;
+    if(custom !== undefined){
+      d = custom;
+    } else {
+      // Auto dose dari cycle effective
+      const qid = quarterFromWeek(w);
+      if(qid){
+        d = tlDoseForWeek(w, c, qid);
+      }
+    }
+    if(d > 0){
+      remaining -= d/mgPerVial;
+      if(remaining < 0) return w - curWeek;
+    }
   }
   return 56-curWeek+1;
 }
@@ -294,21 +310,27 @@ export function parseWeeklyTotal(text){
 }
 
 // Timeline state — per (quarter, compound) cycle config, in-memory (Phase B persist later)
-// Key format: `${qid}|${compoundName}` → { on: int weeks, off: int weeks }
+// Key format: `${qid}|${compoundName}` → { on, off, start } (semua dalam weeks)
+// start = 1-based week offset di dalam quarter (default 1 = mulai dari week pertama quarter)
 export const TL = {
   cycles: {}
 };
 
 export function tlGetCycle(qid, name){
-  return TL.cycles[`${qid}|${name}`] || {on: 0, off: 0};
+  return TL.cycles[`${qid}|${name}`] || {on: 0, off: 0, start: 1};
 }
 
 export function tlSetCycle(qid, name, field, value){
   const key = `${qid}|${name}`;
-  if(!TL.cycles[key]) TL.cycles[key] = {on: 0, off: 0};
+  if(!TL.cycles[key]) TL.cycles[key] = {on: 0, off: 0, start: 1};
   const v = parseInt(value);
   const qWeeks = weeksInQuarter(qid).length || 56;
-  TL.cycles[key][field] = isNaN(v) ? 0 : Math.max(0, Math.min(qWeeks, v));
+  if(field === 'start'){
+    // start is 1-based, max = qWeeks (can't start past last week)
+    TL.cycles[key].start = isNaN(v) ? 1 : Math.max(1, Math.min(qWeeks, v));
+  } else {
+    TL.cycles[key][field] = isNaN(v) ? 0 : Math.max(0, Math.min(qWeeks, v));
+  }
 }
 
 // Seed defaults dari master compound (parsed dari on_cycle/off_cycle CSV)
@@ -323,10 +345,10 @@ export function tlSeedFromMaster(qid, name){
   const off = offP.type === 'weeks' ? offP.max
             : offP.type === 'none' ? 0
             : 0;
-  TL.cycles[`${qid}|${name}`] = {on, off};
+  TL.cycles[`${qid}|${name}`] = {on, off, start: 1};
 }
 
-// Hitung status sel di Timeline grid — per quarter
+// Hitung status sel di Timeline grid — per quarter (dengan START offset)
 // Return: 'on' | 'off' | 'inactive'
 export function tlCellStatus(week, compound, qid){
   if(!compound || !qid) return 'inactive';
@@ -335,11 +357,13 @@ export function tlCellStatus(week, compound, qid){
   const cycle = tlGetCycle(qid, compound.name);
   const onLen = cycle.on || 0;
   const offLen = cycle.off || 0;
+  const startW = cycle.start || 1;  // 1-based offset di dalam quarter
   if(onLen === 0) return 'inactive';
   if(onLen >= 99) return 'on';  // continuous sentinel
   const qStartW = weeksInQ[0];
-  const delta = week - qStartW;
-  if(delta < 0) return 'inactive';
+  // delta dari start offset (week ke-N di quarter, dimulai dari startW)
+  const delta = week - qStartW - (startW - 1);
+  if(delta < 0) return 'inactive';  // sebelum start
   if(offLen === 0){
     // OFF=0 = one-shot: ON untuk `on` minggu pertama, sisanya INACTIVE (gak loop)
     return delta < onLen ? 'on' : 'inactive';
@@ -363,9 +387,9 @@ export function tlDoseForWeek(week, compound, qid){
 // Dipakai oleh Overview (cost/vial summary) supaya gak nunggu user buka Timeline dulu.
 export function tlGetCycleEffective(qid, name){
   const set = TL.cycles[`${qid}|${name}`];
-  if(set && (set.on > 0 || set.off > 0)) return set;
+  if(set && (set.on > 0 || set.off > 0)) return {on:set.on, off:set.off, start:set.start||1};
   const c = COMPOUNDS.find(x => x.name === name);
-  if(!c) return {on:0, off:0};
+  if(!c) return {on:0, off:0, start:1};
   const onP = parseCycleText(c.on_cycle);
   const offP = parseCycleText(c.off_cycle);
   const qWeeks = weeksInQuarter(qid).length || 13;
@@ -373,7 +397,7 @@ export function tlGetCycleEffective(qid, name){
            : onP.type === 'continuous' ? qWeeks
            : 0;
   const off = offP.type === 'weeks' ? offP.max : 0;
-  return {on, off};
+  return {on, off, start: 1};
 }
 
 // Cost untuk compound di quarter — pakai effective cycle + weekly_total + vial_price.
@@ -385,14 +409,17 @@ export function tlCostForQuarter(compound, qid){
   const cycle = tlGetCycleEffective(qid, compound.name);
   const wt = parseWeeklyTotal(compound.weekly_total);
   const perWeekDose = wt?.value || 0;
+  const startOffset = (cycle.start || 1) - 1;  // 0-based offset
   let totalDose = 0;
   weeks.forEach((w, i) => {
     const custom = customDoses[compound.name]?.[w];
     if(custom !== undefined){ totalDose += custom; return; }
     if(cycle.on === 0) return;
+    const idx = i - startOffset;
+    if(idx < 0) return;  // sebelum start week
     let isOn = false;
-    if(cycle.off === 0) isOn = i < cycle.on;
-    else isOn = (i % (cycle.on + cycle.off)) < cycle.on;
+    if(cycle.off === 0) isOn = idx < cycle.on;
+    else isOn = (idx % (cycle.on + cycle.off)) < cycle.on;
     if(isOn) totalDose += perWeekDose;
   });
   const vs = VSPECS[compound.name];

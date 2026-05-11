@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=25';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=26';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=25';
-import * as stateModule from './state.js?v=25';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=25';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=26';
+import * as stateModule from './state.js?v=26';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=26';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=25';
+} from './supabase.js?v=26';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=25';
-import * as panelFns from './panels.js?v=25';
-import * as supaFns from './supabase.js?v=25';
+} from './panels.js?v=26';
+import * as panelFns from './panels.js?v=26';
+import * as supaFns from './supabase.js?v=26';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -64,19 +64,20 @@ window.renderPanels = renderPanels;
 //   - total cost (selected × weekly dose × harga vial)
 //   - range minggu yang fall di quarter itu (kalau ada)
 function renderQuarterRow(){
-  // Compute costs untuk semua quarters supaya bisa cari max (untuk progress bar)
+  // Compute costs untuk semua quarters (pakai tlCostForQuarter — real cost dari Timeline cycle)
   const quarterStats = QUARTERS.map(qid => {
     const selected = DM.selectedByQuarter[qid] || new Set();
     const weeks = weeksInQuarter(qid);
     let totalCost = 0, totalVials = 0;
     selected.forEach(name => {
-      const r = costForQuarter(name, qid);
+      const c = COMPOUNDS.find(x => x.name === name);
+      if(!c) return;
+      const r = tlCostForQuarter(c, qid);
       totalCost += r.cost;
       totalVials += r.vials;
     });
     return { qid, selected, weeks, totalCost, totalVials };
   });
-  const maxCost = Math.max(1, ...quarterStats.map(q => q.totalCost));
 
   // Grand total (semua quarters)
   const grandTotal = quarterStats.reduce((a,q) => a + q.totalCost, 0);
@@ -101,10 +102,31 @@ function renderQuarterRow(){
     </div>
   </div>`;
 
-  // Card per quarter — dinamis
-  const quarterCards = quarterStats.map(({ qid, selected, weeks, totalCost, totalVials }) => {
+  // Pagination: show 4 cards starting from S.qPage. Auto-align ke S.quarter on load.
+  const PAGE_SIZE = 4;
+  let qPage = S.qPage;
+  // Pastikan S.quarter visible: kalau tidak, auto-shift
+  const curIdx = QUARTERS.indexOf(S.quarter);
+  if(curIdx >= 0 && (curIdx < qPage || curIdx >= qPage + PAGE_SIZE)){
+    qPage = Math.max(0, Math.min(QUARTERS.length - PAGE_SIZE, curIdx));
+    S.qPage = qPage;
+  }
+  const visible = quarterStats.slice(qPage, qPage + PAGE_SIZE);
+  const maxCost = Math.max(1, ...visible.map(q => q.totalCost));
+  const canPrev = qPage > 0;
+  const canNext = qPage + PAGE_SIZE < QUARTERS.length;
+
+  // Prev/Next chevrons + page indicator
+  const navRow = `<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;font-size:11px;color:var(--t2)">
+    <button onclick="shiftQuarterPage(-1)" ${!canPrev?'disabled':''} style="padding:5px 14px;border-radius:6px;border:1.5px solid var(--bdr);background:${canPrev?'var(--bg2)':'var(--bg3)'};cursor:${canPrev?'pointer':'not-allowed'};opacity:${canPrev?'1':'.4'};font-weight:700;color:var(--t1)">‹ Prev</button>
+    <span style="font-weight:700;color:var(--t1)">Menampilkan ${quarterLabel(QUARTERS[qPage])} — ${quarterLabel(QUARTERS[Math.min(qPage+PAGE_SIZE-1,QUARTERS.length-1)])} (${qPage+1}-${Math.min(qPage+PAGE_SIZE,QUARTERS.length)}/${QUARTERS.length})</span>
+    <button onclick="shiftQuarterPage(1)" ${!canNext?'disabled':''} style="padding:5px 14px;border-radius:6px;border:1.5px solid var(--bdr);background:${canNext?'var(--bg2)':'var(--bg3)'};cursor:${canNext?'pointer':'not-allowed'};opacity:${canNext?'1':'.4'};font-weight:700;color:var(--t1)">Next ›</button>
+  </div>`;
+
+  // Card per quarter — only visible 4
+  const quarterCards = visible.map(({ qid, selected, weeks, totalCost, totalVials }) => {
     const sel = S.quarter === qid;
-    const pct = Math.round(totalCost/maxCost*100);
+    const pct = maxCost > 0 ? Math.round(totalCost/maxCost*100) : 0;
     const hasWeeks = weeks.length > 0;
     const wRange = hasWeeks ? `W${weeks[0]}–W${weeks[weeks.length-1]}` : '— pre-protocol';
     const dotColor = !hasWeeks ? 'var(--t3)' : selected.size > 0 ? 'var(--acc)' : 'var(--t3)';
@@ -116,20 +138,27 @@ function renderQuarterRow(){
         ${quarterLabel(qid).toUpperCase()}
       </div>
       <div class="ph-name">${quarterLabel(qid)}</div>
-      <div class="ph-desc">${hasWeeks ? `${weeks.length} minggu dose · ${wRange}` : 'Pre-protocol — no doses yet'}</div>
+      <div class="ph-desc">${hasWeeks ? `${weeks.length} minggu · ${wRange}` : 'Pre-protocol'}</div>
       <div class="ph-grid" style="grid-template-columns:1fr 1fr">
-        <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${selected.size}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Biaya</div><div class="ph-stat-v" style="color:${totalCost>0?'var(--acc)':'var(--t3)'}">${totalCost>0?rpM(totalCost):'—'}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v">${totalVials||'—'}</div></div>
-        <div class="ph-stat"><div class="ph-stat-l">Weeks</div><div class="ph-stat-v">${weeks.length||'—'}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${selected.size||'—'}</div></div>
+        <div class="ph-stat"><div class="ph-stat-l">Vials</div><div class="ph-stat-v" style="color:${totalVials>0?'var(--acc)':'var(--t3)'}">${totalVials||'—'}</div></div>
+        <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Biaya Vial</div><div class="ph-stat-v" style="color:${totalCost>0?'var(--acc)':'var(--t3)'};font-size:16px">${totalCost>0?rpM(totalCost):'—'}</div></div>
       </div>
       <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:var(--acc)"></div></div>
     </div>`;
   }).join('');
 
-  document.getElementById('phase-row').innerHTML = allCard + quarterCards;
+  document.getElementById('phase-row').innerHTML = allCard + navRow + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${quarterCards}</div>`;
 }
 window.renderQuarterRow = renderQuarterRow;
+
+// Shift quarter pagination by delta (-1 prev, +1 next, ±4 jump)
+window.shiftQuarterPage = function(delta){
+  const PAGE_SIZE = 4;
+  const newPage = Math.max(0, Math.min(QUARTERS.length - PAGE_SIZE, S.qPage + delta * PAGE_SIZE));
+  S.qPage = newPage;
+  renderQuarterRow();
+};
 
 // ── NAV ──
 const TABS=[
@@ -283,12 +312,21 @@ window.tlSetOn = function(qid, name, value){
     window.tlSetCycle(qid, name, 'on', value);
   }
   renderPanels();
+  renderQuarterRow();
 };
 window.tlSetOff = function(qid, name, value){
   if(typeof window.tlSetCycle === 'function'){
     window.tlSetCycle(qid, name, 'off', value);
   }
   renderPanels();
+  renderQuarterRow();
+};
+window.tlSetStart = function(qid, name, value){
+  if(typeof window.tlSetCycle === 'function'){
+    window.tlSetCycle(qid, name, 'start', value);
+  }
+  renderPanels();
+  renderQuarterRow();
 };
 window.tlSeedDefaults = function(qid, name){
   if(typeof window.tlSeedFromMaster === 'function'){
