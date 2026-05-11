@@ -385,3 +385,46 @@ input[type=range]{width:100%;accent-color:var(--acc);cursor:pointer;height:4px}
 .g-cell:hover{opacity:.75;transform:scaleY(1.15)}
 .g-custom{outline:2px solid var(--hor);outline-offset:-2px}
 .g-custom::after{content:'✎';position:absolute;top:0;right:1px;font-size:7px;color:var(--hor);line-height:18px}
+
+/* ════════════════════════════════════════════════════════════
+   DECISION MATRIX — Drag-drop Builder (Library + 3 Stage Zones)
+   ════════════════════════════════════════════════════════════ */
+.dm-2col{display:grid;grid-template-columns:30% 70%;gap:12px;align-items:start;margin-top:10px}
+.dm-lib{background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--r2);padding:.875rem;max-height:calc(100vh - 260px);overflow-y:auto;box-shadow:var(--shadow-sm)}
+.dm-lib-hdr{font-size:12px;font-weight:800;color:var(--t0);margin-bottom:.625rem;display:flex;align-items:center;gap:6px}
+.dm-lib-search{width:100%;background:var(--bg2);border:1.5px solid var(--bdr2);border-radius:var(--r);padding:7px 10px;font-size:11.5px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--t0);outline:none;margin-bottom:8px}
+.dm-lib-search:focus{border-color:var(--acc)}
+.dm-lib-filters{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--bdr)}
+.dm-lib-chip{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:14px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--t2);cursor:pointer;transition:.12s;font-family:'Plus Jakarta Sans',sans-serif}
+.dm-lib-chip:hover{border-color:var(--acc);color:var(--acc)}
+.dm-lib-chip.act{background:var(--acc);color:#fff;border-color:var(--acc)}
+.dm-zones{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.dm-zone{background:var(--bg2);border:1.5px solid var(--bdr);border-radius:var(--r2);padding:.625rem;min-height:340px;transition:all .15s}
+.dm-zone.drag-over{background:var(--acc-bg);border-color:var(--acc);border-style:dashed;transform:scale(1.005)}
+.dm-zone-hdr{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding-bottom:6px;margin-bottom:8px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center}
+.dm-zone.watchlist .dm-zone-hdr{color:var(--inf)}
+.dm-zone.tentatif .dm-zone-hdr{color:var(--f2)}
+.dm-zone.deal .dm-zone-hdr{color:var(--f3)}
+.dm-zone-cnt{background:rgba(0,0,0,.08);padding:1px 7px;border-radius:10px;font-size:9px;font-weight:800}
+.dm-zone-empty{font-size:10px;color:var(--t3);text-align:center;padding:1rem .5rem;font-style:italic}
+.dm-card{background:var(--bg1);border:1px solid var(--bdr);border-left:3px solid var(--bdr2);border-radius:var(--r);padding:.5rem .625rem;margin-bottom:5px;cursor:grab;display:flex;justify-content:space-between;align-items:center;gap:6px;transition:.12s}
+.dm-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.dm-card:active{cursor:grabbing}
+.dm-card.in-stage{opacity:.45}
+.dm-card-name{font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.dm-card-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.dm-card-cost{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--t2)}
+.dm-card-sport{font-size:9.5px;font-weight:700;color:var(--f2);min-width:22px;text-align:right}
+.dm-card-remove{background:none;border:none;color:var(--warn);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;opacity:.65}
+.dm-card-remove:hover{opacity:1}
+.dm-cat-pill{font-size:8px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:.3px;text-transform:uppercase}
+.dm-cat-pill.off{background:var(--f1-bg);color:var(--f1)}
+.dm-cat-pill.met{background:var(--f2-bg);color:var(--f2)}
+.dm-cat-pill.def{background:var(--f3-bg);color:var(--f3)}
+.dm-cat-pill.hor{background:var(--hor-bg);color:var(--hor)}
+.dm-cat-pill.cns{background:var(--cns-bg);color:var(--cns)}
+.dm-cat-pill.inf{background:var(--inf-bg);color:var(--inf)}
+.dm-seed-banner{font-size:10.5px;color:var(--t2);padding:.45rem .7rem;background:var(--acc-bg);border:1px solid var(--acc-bdr);border-radius:6px;margin-bottom:.6rem;display:flex;align-items:center;gap:8px}
+.dm-seed-banner button{background:transparent;border:1px solid var(--bdr);color:var(--t2);padding:2px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit}
+.dm-phase-prompt{padding:2rem;text-align:center;color:var(--t3);font-size:13px}
+@media(max-width:900px){.dm-2col{grid-template-columns:1fr}.dm-zones{grid-template-columns:1fr;gap:10px}.dm-lib{max-height:400px}}

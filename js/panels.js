@@ -246,200 +246,134 @@ export function dmToggleAll(){
 export function dmSetFilter(key,val){DM[key]=val;window.renderPanels();}
 export function dmUpdateSummary(){window.renderPanels();}
 
+// ── pDecision — Drag-Drop Builder (Library + 3 Stage Zones per fase) ──
 export function pDecision(){
-  const ph=S.ph;
-  const isAll=ph===0;
-  const activePh=isAll?1:ph;
-  const allRows=dmData(ph);
-  const dmtab=DM.dmTab||'pipeline';
+  const ph = S.ph;
 
-  const effCol=(eff)=>eff>=10?'var(--f3)':eff>=5?'var(--f2)':'var(--t3)';
-  const sportCol=(ss)=>ss>=60?'var(--acc)':ss>=40?'var(--f2)':'var(--t3)';
-  const thStyle=(col)=>{const active=DM.sortCol===col;return`style="cursor:pointer;user-select:none;white-space:nowrap;${active?'color:var(--acc)':''}"`;};
-  const sortArrow=(col)=>DM.sortCol===col?(DM.sortDir<0?' ↓':' ↑'):'';
-  const filterBtn=(key,val,label,activeColor='var(--acc)')=>{
-    const active=DM[key]===val;
-    return`<button onclick="dmSetFilter('${key}','${val}')" style="padding:4px 10px;border-radius:20px;border:1px solid ${active?activeColor:'var(--bdr)'};background:${active?activeColor:'var(--bg2)'};color:${active?'#fff':'var(--t2)'};font-size:11px;font-weight:700;cursor:pointer">${label}</button>`;
-  };
-
-  // ── TAB SWITCHER ──
-  const tabBar=`
-  <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid var(--bdr);padding-bottom:10px">
-    <button onclick="DM.dmTab='pipeline';renderPanels()" style="padding:7px 18px;border-radius:8px 8px 0 0;border:2px solid ${dmtab==='pipeline'?'var(--acc)':'var(--bdr)'};border-bottom:none;background:${dmtab==='pipeline'?'var(--acc-bg)':'var(--bg2)'};color:${dmtab==='pipeline'?'var(--acc)':'var(--t2)'};font-weight:800;font-size:12px;cursor:pointer">
-      🔀 Pipeline
-    </button>
-    <button onclick="DM.dmTab='riset';renderPanels()" style="padding:7px 18px;border-radius:8px 8px 0 0;border:2px solid ${dmtab==='riset'?'var(--acc)':'var(--bdr)'};border-bottom:none;background:${dmtab==='riset'?'var(--acc-bg)':'var(--bg2)'};color:${dmtab==='riset'?'var(--acc)':'var(--t2)'};font-weight:800;font-size:12px;cursor:pointer">
-      🔬 Pertimbangan
-    </button>
-  </div>`;
-
-  // ── PIPELINE TAB ──
-  const STAGES=['watchlist','tentatif','deal'];
-  const STAGE_CFG={
-    watchlist:{label:'Watchlist',sub:'Sedang dipertimbangkan',col:'var(--f2)',bg:'#92400e18',next:'tentatif',nextLabel:'→ Tentatif',ico:'👀'},
-    tentatif: {label:'Tentatif',  sub:'Hampir pasti masuk',   col:'#7c3aed',  bg:'#7c3aed18',next:'deal',    nextLabel:'→ Confirm Deal',ico:'🔄'},
-    deal:     {label:'DEAL ✓',   sub:'Sudah diputuskan',     col:'var(--f3)',bg:'#15803d18',next:null,       nextLabel:null,ico:'✅'},
-  };
-
-  const pipelinePanel=(()=>{
-    const byStage={watchlist:[],tentatif:[],deal:[]};
-    allRows.forEach(r=>{const s=DM.stages.get(r.name);if(s)byStage[s].push(r);});
-
-    const dealRows=allRows.filter(r=>DM.stages.has(r.name));
-    const dealN=dealRows.length;
-    const dealCost=dealRows.reduce((a,r)=>a+r.cost,0);
-    const dealSport=dealN?Math.round(dealRows.reduce((a,r)=>a+r.ss,0)/dealN):0;
-    const dealEff=dealN?Math.round(dealRows.reduce((a,r)=>a+r.eff,0)/dealN):0;
-
-    const cols=STAGES.map(s=>{
-      const cfg=STAGE_CFG[s];
-      const items=byStage[s];
-      const cards=items.length===0
-        ?`<div style="text-align:center;padding:20px 8px;color:var(--t3);font-size:11px;border:1.5px dashed var(--bdr);border-radius:8px">Kosong<br><span style="font-size:10px">Push compound dari tab Pertimbangan</span></div>`
-        :items.map(r=>{
-          const prioBadges=`<span class="spill ${scSpill(r.p1)}">${r.p1}</span> <span class="spill ${scSpill(r.p2)}">${r.p2}</span> <span class="spill ${scSpill(r.p3)}">${r.p3}</span>`;
-          return`<div style="padding:10px;border-radius:8px;border:1.5px solid ${cfg.col}44;background:${cfg.bg};margin-bottom:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
-              <div>
-                <div style="font-size:12px;font-weight:800;color:var(--t0)">${r.name}</div>
-                <div style="margin-top:2px">${prioBadges}</div>
-              </div>
-              <span class="lb ${CAT[r.cat].cls}" style="font-size:8px;flex-shrink:0">${CAT[r.cat].n}</span>
-            </div>
-            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-              <span class="status-pill ${r.st.cls}" style="font-size:8px">${r.st.l}</span>
-              <span style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace">${r.cost>0?rpM(r.cost):'—'}</span>
-              <span style="font-size:10px;color:${sportCol(r.ss)}">★${r.ss}</span>
-              <span style="font-size:10px;color:${effCol(r.eff)}">${r.eff>0?r.eff+'x eff':'—'}</span>
-            </div>
-            <div style="display:flex;gap:4px">
-              ${cfg.next?`<button onclick="dmSetStage('${r.name}','${cfg.next}')" style="flex:1;padding:4px 6px;border-radius:6px;border:none;background:${cfg.col};color:#fff;font-size:10px;font-weight:800;cursor:pointer">${cfg.nextLabel}</button>`:''}
-              <button onclick="dmSetStage('${r.name}',null)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t2);font-size:10px;font-weight:700;cursor:pointer">✕ Hapus</button>
-            </div>
-          </div>`;
-        }).join('');
-      return`<div style="flex:1;min-width:200px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:${cfg.bg};border-left:3px solid ${cfg.col}">
-          <div style="font-size:16px">${cfg.ico}</div>
-          <div>
-            <div style="font-size:12px;font-weight:800;color:${cfg.col}">${cfg.label} <span style="font-size:11px;color:var(--t3)">(${items.length})</span></div>
-            <div style="font-size:10px;color:var(--t2)">${cfg.sub}</div>
-          </div>
-        </div>
-        ${cards}
-      </div>`;
-    }).join('');
-
-    return`<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">${cols}</div>
-    <div style="margin-top:14px;padding:10px 14px;border-radius:var(--r);background:var(--bg2);border:1px solid var(--bdr);display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px">
-      ${dealN===0
-        ?`<span style="color:var(--t3)">Belum ada compound di pipeline — push dari tab Pertimbangan</span>`
-        :`<span style="font-weight:800;color:var(--t0)">${dealN} compound dalam pipeline</span>
-          <span class="dm-sep"></span>
-          <span>Total Biaya: <strong style="color:var(--warn)">${rpM(dealCost)}</strong></span>
-          <span class="dm-sep"></span>
-          <span>Avg Sport: <strong style="color:${sportCol(dealSport)}">★${dealSport}</strong></span>
-          <span class="dm-sep"></span>
-          <span>Avg Efisiensi: <strong style="color:${effCol(dealEff)}">${dealEff>0?dealEff+'x':'—'}</strong></span>`}
+  // Fase 0 = "Semua Fase" → tidak bisa edit, suruh pilih fase
+  if(ph === 0){
+    return `<div class="card">
+      <div class="card-title"><span class="ico">🎯</span> Decision Matrix</div>
+      <div class="dm-phase-prompt">Pilih Fase 1, 2, atau 3 di atas untuk mulai edit decision matrix.</div>
     </div>`;
-  })();
+  }
 
-  // ── PERTIMBANGAN TAB ──
-  const risetPanel=(()=>{
-    const filtered=dmSort(dmApplyFilters(allRows));
-    const allNames=filtered.map(r=>r.name);
-    stateModule._dmAllNames.length=0;
-    allNames.forEach(n=>stateModule._dmAllNames.push(n));
+  const phaseStages = DM.stagesByPhase[ph] || new Map();   // Map<name, stage>
+  const showSeedBanner = DM.seedBanner[ph];
 
-    const catFilters=Object.entries(CAT).map(([k,v])=>filterBtn('filterLayer',k,v.n,v.col)).join('');
-    const stFilters=['WAJIB','OPSIONAL','RENDAH','OFF'].map(s=>filterBtn('filterStatus',s,s)).join('');
-    const sportFilters=[filterBtn('filterSport','hi','★ ≥60','var(--acc)'),filterBtn('filterSport','mid','★ 40–59','var(--f2)'),filterBtn('filterSport','lo','★ &lt;40','var(--t3)')].join('');
-    const effFilters=[filterBtn('filterEff','hi','≥10x','var(--f3)'),filterBtn('filterEff','mid','5–9x','var(--f2)'),filterBtn('filterEff','lo','&lt;5x','var(--t3)')].join('');
+  // Helper: derive prio + cost per compound utk display di card
+  const compoundCard = (c, inStage=false) => {
+    const sport = SP[c.name];
+    const sportScore = sport ? Math.round((sport.z2*.3+sport.pw*.2+sport.rc*.2+sport.hr*.15+sport.cn*.15)*20) : 0;
+    const cost = c.c[`f${ph}`]?.cost || 0;
+    const costStr = cost > 0 ? rpM(cost) : '—';
+    return `<div class="dm-card${inStage?' in-stage':''}"
+      draggable="true"
+      ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','library')">
+      <div class="dm-card-name" title="${c.name}">${c.name}</div>
+      <div class="dm-card-meta">
+        <span class="dm-cat-pill ${c.cat}">${(CAT[c.cat]?.n||c.cat).slice(0,3)}</span>
+        <span class="dm-card-cost">${costStr}</span>
+        <span class="dm-card-sport">★${sportScore}</span>
+      </div>
+    </div>`;
+  };
 
-    const rows=filtered.map(r=>{
-      const stage=DM.stages.get(r.name)||null;
-      const stageCfg=stage?STAGE_CFG[stage]:null;
-      const prioBadges=`<span class="spill ${scSpill(r.p1)}">${r.p1}</span> <span class="spill ${scSpill(r.p2)}">${r.p2}</span> <span class="spill ${scSpill(r.p3)}">${r.p3}</span>`;
-      const stageBadge=stage
-        ?`<span style="padding:2px 8px;border-radius:20px;font-size:9px;font-weight:800;background:${stageCfg.bg};color:${stageCfg.col};border:1px solid ${stageCfg.col}44">${stageCfg.ico} ${stageCfg.label}</span>`
-        :`<span style="padding:2px 8px;border-radius:20px;font-size:9px;color:var(--t3);border:1px solid var(--bdr)">—</span>`;
-      const rowBg=stage?`background:${STAGE_CFG[stage].bg};`:''
-      return`<tr style="${rowBg}">
-        <td><span class="lb ${CAT[r.cat].cls}">${CAT[r.cat].n}</span></td>
-        <td>
-          <div style="font-size:13px;font-weight:700;color:var(--t0)">${r.name}</div>
-          <div style="margin-top:2px">${prioBadges}</div>
-        </td>
-        <td class="c"><span class="status-pill ${r.st.cls}">${r.st.l}</span></td>
-        <td class="r"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${r.cost>0?'var(--t1)':'var(--t3)'}">${r.cost>0?rpM(r.cost):'—'}</span></td>
-        <td class="c">
-          <div style="display:flex;align-items:center;gap:5px;justify-content:center">
-            <div style="width:36px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden"><div style="width:${Math.round(r.ss/100*100)}%;height:100%;background:${sportCol(r.ss)}"></div></div>
-            <span style="font-size:11px;font-weight:700;color:${sportCol(r.ss)}">★${r.ss}</span>
-          </div>
-        </td>
-        <td class="c">
-          <div style="display:flex;align-items:center;gap:5px;justify-content:center">
-            <div style="width:36px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden"><div style="width:${Math.min(100,Math.round(r.eff/20*100))}%;height:100%;background:${effCol(r.eff)}"></div></div>
-            <span style="font-size:11px;font-weight:700;color:${effCol(r.eff)}">${r.eff>0?r.eff+'x':'—'}</span>
-          </div>
-        </td>
-        <td class="c">${stageBadge}</td>
-        <td class="c">
-          <div style="display:flex;gap:4px;justify-content:center">
-            ${!stage?`<button onclick="dmSetStage('${r.name}','watchlist')" style="padding:4px 10px;border-radius:6px;border:1px solid var(--f2)44;background:var(--bg2);color:var(--f2);font-size:10px;font-weight:800;cursor:pointer">👀 Watch</button>`:''}
-            ${stage==='watchlist'?`<button onclick="dmSetStage('${r.name}','tentatif')" style="padding:4px 10px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:10px;font-weight:800;cursor:pointer">→ Tentatif</button>`:''}
-            ${stage==='tentatif'?`<button onclick="dmSetStage('${r.name}','deal')" style="padding:4px 10px;border-radius:6px;border:none;background:var(--f3);color:#fff;font-size:10px;font-weight:800;cursor:pointer">→ Deal ✓</button>`:''}
-            ${stage?`<button onclick="dmSetStage('${r.name}',null)" style="padding:4px 6px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t3);font-size:10px;cursor:pointer">✕</button>`:''}
-          </div>
-        </td>
-      </tr>`;
+  const stageCard = (c, stage) => {
+    const sport = SP[c.name];
+    const sportScore = sport ? Math.round((sport.z2*.3+sport.pw*.2+sport.rc*.2+sport.hr*.15+sport.cn*.15)*20) : 0;
+    const cost = c.c[`f${ph}`]?.cost || 0;
+    const costStr = cost > 0 ? rpM(cost) : '—';
+    return `<div class="dm-card"
+      draggable="true"
+      ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','${stage}')">
+      <div class="dm-card-name" title="${c.name}">${c.name}</div>
+      <div class="dm-card-meta">
+        <span class="dm-card-cost">${costStr}</span>
+        <span class="dm-card-sport">★${sportScore}</span>
+        <button class="dm-card-remove" onclick="dmRemoveStage('${c.name.replace(/'/g,"\\'")}')" title="Hapus dari ${stage}">✕</button>
+      </div>
+    </div>`;
+  };
+
+  // ── LIBRARY (kiri 30%) — semua 29 compounds, filterable ──
+  const search = (DM.libSearch || '').toLowerCase();
+  const filterLayer = DM.filterLayer || 'all';
+  const filteredLibrary = COMPOUNDS.filter(c => {
+    if(filterLayer !== 'all' && c.cat !== filterLayer) return false;
+    if(search && !c.name.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const layerChips = ['all', ...Object.keys(CAT)].map(k => {
+    const lbl = k === 'all' ? 'Semua' : (CAT[k]?.n || k);
+    const active = filterLayer === k;
+    return `<button class="dm-lib-chip${active?' act':''}" onclick="DM.filterLayer='${k}';renderPanels()">${lbl}</button>`;
+  }).join('');
+
+  const libraryHtml = `
+    <div class="dm-lib">
+      <div class="dm-lib-hdr">📚 Library <span style="font-size:9px;font-weight:600;color:var(--t3);margin-left:auto">${filteredLibrary.length}/${COMPOUNDS.length}</span></div>
+      <input class="dm-lib-search" type="search" placeholder="🔍 Cari compound..." value="${DM.libSearch||''}"
+        oninput="DM.libSearch=this.value;renderPanels()">
+      <div class="dm-lib-filters">${layerChips}</div>
+      ${filteredLibrary.length === 0
+        ? '<div class="dm-zone-empty">Tidak ada match</div>'
+        : filteredLibrary.map(c => compoundCard(c, phaseStages.has(c.name))).join('')
+      }
+    </div>`;
+
+  // ── STAGE ZONES (kanan 70%) — Watchlist, Tentatif, Deal ──
+  const stageList = (stage) => {
+    const names = [...phaseStages.entries()].filter(([,v]) => v === stage).map(([k]) => k);
+    if(!names.length) return `<div class="dm-zone-empty">Drag dari library ke sini</div>`;
+    return names.map(n => {
+      const c = COMPOUNDS.find(x => x.name === n);
+      return c ? stageCard(c, stage) : '';
     }).join('');
+  };
 
-    return`
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:10px;font-weight:800;color:var(--t3);min-width:70px">LAYER</span>
-        ${filterBtn('filterLayer','all','Semua')}${catFilters}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:10px;font-weight:800;color:var(--t3);min-width:70px">STATUS</span>
-        ${filterBtn('filterStatus','all','Semua')}${stFilters}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:10px;font-weight:800;color:var(--t3);min-width:70px">SPORT</span>
-        ${filterBtn('filterSport','all','Semua')}${sportFilters}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:10px;font-weight:800;color:var(--t3);min-width:70px">EFISIENSI</span>
-        ${filterBtn('filterEff','all','Semua')}${effFilters}
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr style="position:sticky;top:0;background:var(--bg1);z-index:2">
-          <th onclick="dmSortBy('cat')" ${thStyle('cat')}>Layer${sortArrow('cat')}</th>
-          <th onclick="dmSortBy('name')" ${thStyle('name')}>Compound${sortArrow('name')}</th>
-          <th class="c" onclick="dmSortBy('prio')" ${thStyle('prio')}>Status${sortArrow('prio')}</th>
-          <th class="r" onclick="dmSortBy('cost')" ${thStyle('cost')}>Biaya${sortArrow('cost')}</th>
-          <th class="c" onclick="dmSortBy('ss')" ${thStyle('ss')}>Sport${sortArrow('ss')}</th>
-          <th class="c" onclick="dmSortBy('eff')" ${thStyle('eff')}>Efisiensi${sortArrow('eff')}</th>
-          <th class="c">Stage</th>
-          <th class="c">Aksi</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="note" style="margin-top:8px">Klik "Watch" → masuk Watchlist · "→ Tentatif" → hampir fix · "→ Deal ✓" → confirmed · Compound di Tentatif+Deal otomatis masuk Vial Planner</div>`;
-  })();
+  const zoneInfo = [
+    { id:'watchlist', icon:'👀', label:'Watchlist' },
+    { id:'tentatif',  icon:'🔄', label:'Tentatif'  },
+    { id:'deal',      icon:'✅', label:'Deal'      },
+  ];
 
-  return`
+  const zonesHtml = `
+    <div class="dm-zones">
+      ${zoneInfo.map(z => {
+        const names = [...phaseStages.entries()].filter(([,v]) => v === z.id);
+        return `<div class="dm-zone ${z.id}"
+          ondragover="onDmDragOver(event)"
+          ondragleave="onDmDragLeave(event)"
+          ondrop="onDmDrop(event,'${z.id}')">
+          <div class="dm-zone-hdr">
+            <span>${z.icon} ${z.label}</span>
+            <span class="dm-zone-cnt">${names.length}</span>
+          </div>
+          ${stageList(z.id)}
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  const seedBannerHtml = showSeedBanner ? `
+    <div class="dm-seed-banner">
+      <span style="flex:1">💡 Auto-seeded compounds dengan sport score ≥60 ke Watchlist. Edit sesuai kebutuhan.</span>
+      <button onclick="DM.seedBanner[${ph}]=false;renderPanels()">Tutup</button>
+    </div>` : '';
+
+  return `
   <div class="card">
-    <div class="card-title"><span class="ico">🎯</span> Decision Matrix — ${isAll?'Semua Fase':'Fase '+activePh}</div>
-    ${tabBar}
-    ${dmtab==='pipeline'?pipelinePanel:risetPanel}
+    <div class="card-title"><span class="ico">🎯</span> Decision Matrix — Fase ${ph}</div>
+    ${seedBannerHtml}
+    <div class="dm-2col">
+      ${libraryHtml}
+      ${zonesHtml}
+    </div>
+    <div class="note" style="margin-top:12px">Drag compound dari Library ke salah satu stage. Drag antar stage untuk promote/demote. Klik ✕ untuk kembalikan ke library. Compound di Tentatif+Deal otomatis masuk Vial Planner.</div>
   </div>`;
 }
+
 
 // ──────────────────────────────────────────
 // P2 — VIAL / INVENTORY TRACKER

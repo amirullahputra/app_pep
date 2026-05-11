@@ -18,9 +18,10 @@ window.addEventListener('unhandledrejection', e => {
   </div>`;
 });
 
-import { PHASES, COMPOUNDS } from './data.js';
+import { PHASES, COMPOUNDS, SP } from './data.js';
 import { S, pCost, rpM, initBudSel } from './state.js';
 import * as stateModule from './state.js';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -29,7 +30,9 @@ import {
   openInvEdit, closeInvModal, confirmInvEdit,
   openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
   openAuthModal, closeAuthModal, doLogin, updateAuthUI, onAuthBtnClick,
-  setupAuthListener
+  setupAuthListener,
+  loadDMStages, setDMStage, removeDMStage, seedDMStages,
+  supa
 } from './supabase.js';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
@@ -123,10 +126,101 @@ function renderNav(){
 window.renderNav = renderNav;
 
 // ── SET PHASE / TAB ──
-function setPhase(n){S.ph=n;renderPhaseRow();renderPanels();}
+function setPhase(n){S.ph=n;syncDMStages();renderPhaseRow();renderPanels();}
 function setTab(n){S.tab=n;renderNav();renderPanels();}
 window.setPhase = setPhase;
 window.setTab = setTab;
+
+// ── DECISION MATRIX — Drag & Drop Handlers ──
+// Drop sources: library (drag dari kiri), atau salah satu stage (drag antar zones)
+// Drop targets: salah satu dari 3 zones (watchlist/tentatif/deal)
+window.onDmDragStart = function(ev, compoundName, source){
+  ev.dataTransfer.setData('text/plain', JSON.stringify({ name: compoundName, source }));
+  ev.dataTransfer.effectAllowed = 'move';
+};
+window.onDmDragOver = function(ev){
+  ev.preventDefault();
+  ev.currentTarget.classList.add('drag-over');
+  ev.dataTransfer.dropEffect = 'move';
+};
+window.onDmDragLeave = function(ev){
+  ev.currentTarget.classList.remove('drag-over');
+};
+window.onDmDrop = async function(ev, targetStage){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drag-over');
+  let payload;
+  try { payload = JSON.parse(ev.dataTransfer.getData('text/plain')); }
+  catch(_){ return; }
+  const { name, source } = payload || {};
+  if(!name) return;
+  // Same source == target? do nothing (drop on same column)
+  if(source === targetStage) return;
+  // Validate phase context
+  const ph = S.ph;
+  if(ph === 0){ alert('Pilih Fase 1/2/3 dulu'); return; }
+  if(!S.user){ alert('Login dulu untuk menyimpan Decision Matrix'); return; }
+
+  // Optimistic update local state
+  if(!DM.stagesByPhase[ph]) DM.stagesByPhase[ph] = new Map();
+  DM.stagesByPhase[ph].set(name, targetStage);
+  syncDMStages();
+  renderPanels();
+
+  // Persist to DB
+  try { await setDMStage(S.user.id, ph, name, targetStage); }
+  catch(e){
+    alert('Gagal simpan: '+(e.message||e));
+    // Revert optimistic
+    DM.stagesByPhase[ph].delete(name);
+    syncDMStages();
+    renderPanels();
+  }
+};
+
+window.dmRemoveStage = async function(compoundName){
+  const ph = S.ph;
+  if(ph === 0) return;
+  if(!S.user){ alert('Login dulu'); return; }
+  const had = DM.stagesByPhase[ph]?.get(compoundName);
+  if(!had) return;
+
+  // Optimistic remove
+  DM.stagesByPhase[ph].delete(compoundName);
+  syncDMStages();
+  renderPanels();
+
+  try { await removeDMStage(S.user.id, ph, compoundName); }
+  catch(e){
+    alert('Gagal hapus: '+(e.message||e));
+    DM.stagesByPhase[ph].set(compoundName, had);   // revert
+    syncDMStages();
+    renderPanels();
+  }
+};
+
+// Load + optional seed Decision Matrix stages untuk user
+async function refreshDMStages(){
+  if(!S.user) return;
+  try {
+    const fresh = await loadDMStages(S.user.id);
+    DM.stagesByPhase = fresh;
+    // Auto-seed setiap phase yang kosong (1, 2, 3)
+    for(const ph of [1, 2, 3]){
+      if(DM.stagesByPhase[ph] && DM.stagesByPhase[ph].size === 0){
+        const seed = buildDefaultSeed();
+        if(seed.length){
+          await seedDMStages(S.user.id, ph, seed);
+          // Reload stages this phase
+          DM.stagesByPhase[ph] = new Map(seed.map(s => [s.compound_name, s.stage]));
+          DM.seedBanner[ph] = true;
+        }
+      }
+    }
+    syncDMStages();
+  } catch(e){ console.error('refreshDMStages:', e); }
+}
+window.refreshDMStages = refreshDMStages;
 
 // ── BUDGET HELPERS ──
 function toggleBudSel(n){S.budSel.has(n)?S.budSel.delete(n):S.budSel.add(n);saveBudgetToDB();renderPanels();}
