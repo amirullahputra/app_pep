@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=29';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=30';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,19 +12,24 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=29';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=29';
+} from './state.js?v=30';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=30';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=29';
+import * as stateModule from './state.js?v=30';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
 // ──────────────────────────────────────────
 export function pOverview(){
   if(!COMPOUNDS.length) return `<div class="card" style="padding:2rem;text-align:center;color:var(--t3)">⏳ Memuat data...</div>`;
+  const allMode = S.viewAll === true;
   const qid = S.quarter || QUARTERS[0];
-  const qLabel = quarterLabel(qid);
+  const qLabel = allMode ? 'All Quarters' : quarterLabel(qid);
+  // Scope quarters: when allMode → all DM-active quarters. Else just current.
+  const scopeQuarters = allMode
+    ? QUARTERS.filter(q => (DM.selectedByQuarter[q]?.size || 0) > 0)
+    : [qid];
 
   // Tanggal aktual dari W1 = 6 Juli 2026
   const PROTOCOL_START_LOCAL = new Date('2026-07-06T00:00:00');
@@ -40,17 +45,21 @@ export function pOverview(){
   const cwStart = weekToDate(cw);
   const cwEnd = new Date(cwStart); cwEnd.setDate(cwEnd.getDate()+6);
 
-  const dealt = dmDealt();   // Set compound names di quarter aktif
+  // dealt = union compound names across scope quarters
+  const dealt = new Set();
+  scopeQuarters.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealt.add(n)));
   const dealtFilter = dealt.size > 0 ? (c => dealt.has(c.name)) : (()=>true);
 
-  // Compound aktif minggu ini = di-DM + status ON di cycle week ini
-  // (pakai tlCellStatus + tlDoseForWeek, bukan c.d[w] yang udah di-drop)
+  // Compound aktif minggu ini = di-DM (untuk quarter dari week ini) + ON cycle
+  // Note: di allMode, week ini cuma di 1 quarter. Cek compound DM untuk quarter itu.
+  const cwQuarterAct = quarterFromWeek(cw) || qid;
+  const dmAtCwQuarter = DM.selectedByQuarter[cwQuarterAct] || new Set();
   const activeThisWeek = COMPOUNDS
-    .filter(c => dealt.has(c.name))
-    .filter(c => tlCellStatus(cw, c, qid) === 'on')
+    .filter(c => dmAtCwQuarter.has(c.name))
+    .filter(c => tlCellStatus(cw, c, cwQuarterAct) === 'on')
     .map(c => ({
       ...c,
-      dose: tlDoseForWeek(cw, c, qid),
+      dose: tlDoseForWeek(cw, c, cwQuarterAct),
       unit: VSPECS[c.name]?.unit || 'mg',
       eff: c.efficiency_score || 0
     }))
@@ -90,10 +99,12 @@ export function pOverview(){
         }).join('')
     }`;
 
-  // Biaya per kategori (quarter aktif, dari DM-selected, pakai tlCostForQuarter)
+  // Biaya per kategori — sum across scopeQuarters
   const cc = {}; Object.keys(CAT).forEach(k => cc[k] = 0);
-  COMPOUNDS.filter(c => dealt.has(c.name)).forEach(c => {
-    cc[c.cat] += tlCostForQuarter(c, qid).cost;
+  scopeQuarters.forEach(q => {
+    COMPOUNDS.filter(c => DM.selectedByQuarter[q]?.has(c.name)).forEach(c => {
+      cc[c.cat] += tlCostForQuarter(c, q).cost;
+    });
   });
   const mxcc = Math.max(...Object.values(cc), 1);
   const catBars = Object.entries(cc).filter(([,v]) => v > 0).map(([k,v]) => `
@@ -112,10 +123,16 @@ export function pOverview(){
     .sort((a,b) => b.eff - a.eff);
   const maxEff = Math.max(...quarterActive.map(c => c.eff), 1);
 
-  // Recap vial untuk quarter (pakai tlCostForQuarter — handle dose dari Timeline cycle)
+  // Recap vial — sum across scopeQuarters per compound
   const vialRecap = quarterActive.map(c => {
-    const r = tlCostForQuarter(c, qid);
-    return { name: c.name, cat: c.cat, vials: r.vials, cost: r.cost, totalDose: r.totalDose, unit: r.unit };
+    let vials = 0, cost = 0, totalDose = 0;
+    scopeQuarters.forEach(q => {
+      if(DM.selectedByQuarter[q]?.has(c.name)){
+        const r = tlCostForQuarter(c, q);
+        vials += r.vials; cost += r.cost; totalDose += r.totalDose;
+      }
+    });
+    return { name: c.name, cat: c.cat, vials, cost, totalDose, unit: VSPECS[c.name]?.unit||'mg' };
   }).filter(r => r.vials > 0).sort((a,b) => b.vials - a.vials);
   const maxV = Math.max(1, ...vialRecap.map(r => r.vials));
   const totalV = vialRecap.reduce((a,r) => a + r.vials, 0);
@@ -247,6 +264,18 @@ export function dmUpdateSummary(){window.renderPanels();}
 
 // ── pDecision — Drag-Drop Builder (Library + Selected zone per quarter) ──
 export function pDecision(){
+  // viewAll mode: DM fundamental per-quarter, tampil banner
+  if(S.viewAll){
+    return `<div class="card">
+      <div class="card-title"><span class="ico">🎯</span> Decision Matrix — All Quarters Mode</div>
+      <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.6">
+        <div style="font-size:36px;margin-bottom:10px">📊</div>
+        <div>Mode <b>All Quarters</b> aktif (klik Grand Total).</div>
+        <div style="margin-top:6px;font-size:11px">Decision Matrix per-quarter — buka quarter spesifik di atas untuk edit selection compound.</div>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setQuarter('Q3_2026')">Buka Q3 2026 →</button>
+      </div>
+    </div>`;
+  }
   const qid = S.quarter;
 
   if(!qid){
@@ -363,7 +392,14 @@ export function pVial(){
   const vt=S.vialTab||'stok';
 
   // ── FILTER BY pipeline (tentatif + deal dari Decision Matrix) ──
-  const dealtNames=dmDealt();
+  const allMode = S.viewAll === true;
+  let dealtNames;
+  if(allMode){
+    dealtNames = new Set();
+    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealtNames.add(n)));
+  } else {
+    dealtNames = dmDealt();
+  }
   const dealtCpds=dealtNames.size>0?COMPOUNDS.filter(c=>dealtNames.has(c.name)):COMPOUNDS;
   const noDeal=dealtNames.size===0;
 
@@ -683,6 +719,18 @@ export function pVial(){
 // P3 — TIMELINE
 // ──────────────────────────────────────────
 export function pTimeline(){
+  // viewAll mode: Timeline fundamental per-quarter, tampil banner
+  if(S.viewAll){
+    return `<div class="card">
+      <div class="card-title"><span class="ico">🗓</span> Timeline — All Quarters Mode</div>
+      <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.6">
+        <div style="font-size:36px;margin-bottom:10px">📊</div>
+        <div>Mode <b>All Quarters</b> aktif (klik Grand Total).</div>
+        <div style="margin-top:6px;font-size:11px">Timeline per-quarter — buka quarter spesifik di atas untuk set ON/OFF/START/DOSE per compound.</div>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setQuarter('Q3_2026')">Buka Q3 2026 →</button>
+      </div>
+    </div>`;
+  }
   const qid = S.quarter || QUARTERS[0];
   const qLabel = quarterLabel(qid);
   const weeks = weeksInQuarter(qid);
@@ -808,10 +856,22 @@ export function pTimeline(){
 // ──────────────────────────────────────────
 export function pBudget(){
   // Pakai S.quarter global — TIDAK ada quarter chip
+  const allMode = S.viewAll === true;
   const qid = S.quarter;
   const cap = S.budCap;
-  const qLabel = quarterLabel(qid);
-  const dmSelected = DM.selectedByQuarter[qid] || new Set();
+  const qLabel = allMode ? 'All Quarters' : quarterLabel(qid);
+  // dmSelected: union all quarters in allMode, else per-quarter
+  let dmSelected;
+  if(allMode){
+    dmSelected = new Set();
+    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dmSelected.add(n)));
+  } else {
+    dmSelected = DM.selectedByQuarter[qid] || new Set();
+  }
+  // scopeQuarters untuk cost aggregation
+  const scopeQuarters = allMode
+    ? QUARTERS.filter(q => (DM.selectedByQuarter[q]?.size || 0) > 0)
+    : [qid];
 
   // Empty state: DM untuk quarter ini belum di-isi
   if(dmSelected.size === 0){
@@ -828,17 +888,22 @@ export function pBudget(){
   }
 
   // Compound list dari DM — sorted by efficiency_score DESC
+  // Cost: sum across scopeQuarters per compound (kalau allMode → multi-quarter sum)
   const sorted = [...COMPOUNDS]
     .filter(c => dmSelected.has(c.name))
     .map(c => {
-      const r = tlCostForQuarter(c, qid);
+      let cost = 0, vials = 0, totalDose = 0;
+      scopeQuarters.forEach(q => {
+        if(DM.selectedByQuarter[q]?.has(c.name)){
+          const r = tlCostForQuarter(c, q);
+          cost += r.cost; vials += r.vials; totalDose += r.totalDose;
+        }
+      });
       return {
         ...c,
         eff: c.efficiency_score || 0,
-        cost: r.cost,
-        vials: r.vials,
-        totalDose: r.totalDose,
-        unit: r.unit
+        cost, vials, totalDose,
+        unit: VSPECS[c.name]?.unit || 'mg'
       };
     })
     .sort((a,b) => b.eff - a.eff);

@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=29';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=30';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=29';
-import * as stateModule from './state.js?v=29';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=29';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=30';
+import * as stateModule from './state.js?v=30';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=30';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=29';
+} from './supabase.js?v=30';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=29';
-import * as panelFns from './panels.js?v=29';
-import * as supaFns from './supabase.js?v=29';
+} from './panels.js?v=30';
+import * as panelFns from './panels.js?v=30';
+import * as supaFns from './supabase.js?v=30';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -88,10 +88,11 @@ function renderQuarterRow(){
   const grandVials = allStats.reduce((a,q) => a + q.totalVials, 0);
   const grandWeeks = allStats.reduce((a,q) => a + q.weeks.length, 0);
 
-  const allCard = `<div class="ph-card sel-all" style="grid-column:1/-1">
+  const allCardClass = S.viewAll ? 'ph-card sel-all sel-all-active' : 'ph-card sel-all';
+  const allCard = `<div class="${allCardClass}" style="grid-column:1/-1;cursor:pointer" onclick="setViewAll(true)">
     <div class="ph-tag" style="color:var(--acc)">
       <div class="ph-dot" style="background:var(--acc)"></div>
-      GRAND TOTAL · ${QUARTERS.length} QUARTERS (2026–2028)
+      GRAND TOTAL · ${QUARTERS.length} QUARTERS (2026–2028) ${S.viewAll?'<span style="margin-left:8px;padding:2px 8px;background:var(--acc);color:#fff;border-radius:10px;font-size:9px">AKTIF</span>':''}
     </div>
     <div class="ph-name">Multi-Quarter Protocol Overview</div>
     <div class="ph-desc">${grandCompounds} compounds aktif (terpilih di Decision Matrix) · ${grandWeeks} minggu total dose · biaya kumulatif dari DM</div>
@@ -116,7 +117,7 @@ function renderQuarterRow(){
     const dotColor = !hasWeeks ? 'var(--t3)' : selected.size > 0 ? 'var(--acc)' : 'var(--t3)';
     const isEmpty = selected.size === 0;
 
-    return `<div class="ph-card${sel?' sel-quarter':''}${isEmpty?' empty':''}" onclick="setQuarter('${qid}')">
+    return `<div class="ph-card${sel?' sel-quarter':''}${isEmpty?' empty':''}${S.viewAll?' dim':''}" onclick="setQuarter('${qid}')">
       <div class="ph-tag" style="color:${dotColor}">
         <div class="ph-dot" style="background:${dotColor}"></div>
         ${quarterLabel(qid).toUpperCase()}
@@ -158,6 +159,7 @@ function setQuarter(qid){
   if(!QUARTERS.includes(qid)) return;
   S.quarter = qid;
   S.budQuarter = qid;  // budget tab follows main quarter
+  S.viewAll = false;   // klik quarter exit all-quarters mode
   syncDMStages();
   renderQuarterRow();
   renderPanels();
@@ -165,6 +167,13 @@ function setQuarter(qid){
 function setTab(n){S.tab=n;renderNav();renderPanels();}
 window.setQuarter = setQuarter;
 window.setTab = setTab;
+
+// Multi-Quarter view mode: klik GRAND TOTAL → aggregate semua quarter
+window.setViewAll = function(flag){
+  S.viewAll = !!flag;
+  renderQuarterRow();
+  renderPanels();
+};
 
 // ── DECISION MATRIX — Drag & Drop Handlers (single "Selected for Fase N" zone) ──
 window.onDmDragStart = function(ev, compoundName, source){

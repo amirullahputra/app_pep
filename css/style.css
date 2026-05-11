@@ -61,6 +61,9 @@ body{background:var(--bg);color:var(--t0);font-family:'Plus Jakarta Sans',system
 .ph-card.sel-quarter{border-color:var(--acc);background:var(--acc-bg);box-shadow:0 0 0 3px rgba(67,97,238,.18),var(--shadow)}
 .ph-card.empty{opacity:.55}
 .ph-card.empty:hover{opacity:.85}
+.ph-card.sel-all-active{border-color:var(--acc);background:var(--acc-bg);box-shadow:0 0 0 4px rgba(67,97,238,.25),var(--shadow);transform:translateY(-1px)}
+.ph-card.dim{opacity:.45}
+.ph-card.dim:hover{opacity:.75}
 .ph-tgl.tacc{background:var(--acc);color:#fff;border-color:var(--acc)}
 
 /* ════════════════════════════════════════════════════════════

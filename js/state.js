@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=29';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=30';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -92,7 +92,8 @@ export let S={
   filterCats: new Set(Object.keys(CAT)),
   search: '',
   user: null,
-  qPage: 0,   // Quarter row pagination start index (0-based)
+  qPage: 0,       // Quarter row pagination start index (0-based) — deprecated
+  viewAll: false, // true = aggregate semua quarter (Grand Total active)
 };
 
 // Sumber S.budSel default: semua compound yang punya cost>0 di quarter aktif
