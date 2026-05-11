@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=22';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=23';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -11,11 +11,11 @@ import {
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle
-} from './state.js?v=22';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=22';
+} from './state.js?v=23';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=23';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=22';
+import * as stateModule from './state.js?v=23';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -728,19 +728,10 @@ export function pTimeline(){
     // Per-row summary
     const sum = tlVialSummary(c, weeks, qid);
     grandTotalVials += sum.vials;
-    const vPrice = VSPECS[c.name]?.vPrice || 0;
-    const rowCost = sum.vials * vPrice;
-    grandTotalCost += rowCost;
+    const grandTotalDoseObj = {};  // placeholder, not used
 
-    // Master suggestion hint
-    const onP = parseCycleText(c.on_cycle);
-    const offP = parseCycleText(c.off_cycle);
-    const masterOn = onP.type === 'weeks' ? onP.max : onP.type === 'continuous' ? '∞' : '—';
-    const masterOff = offP.type === 'weeks' ? offP.max : offP.type === 'none' ? 0 : '—';
-    const masterHint = `Default dari master: ${masterOn}w on / ${masterOff}w off · ${wtLabel}`;
-
-    const summaryHtml = sum.vials > 0
-      ? `<span class="tl-sum-v">${sum.vials}<small>v</small></span><span class="tl-sum-d">${Math.round(sum.totalDose)}${sum.unit}</span>${rowCost>0?`<span class="tl-sum-c">${rpM(rowCost)}</span>`:''}`
+    const summaryHtml = sum.totalDose > 0
+      ? `<span class="tl-sum-d">${Math.round(sum.totalDose*10)/10}<small>${sum.unit}</small></span><span class="tl-sum-v">${sum.vials} vial</span>`
       : `<span class="tl-sum-empty">—</span>`;
 
     return `<div class="tl-row">
@@ -752,7 +743,6 @@ export function pTimeline(){
         <div class="tl-cycle-input">
           ON:<input type="number" min="0" max="${weeks.length}" value="${cycle.on||''}" onchange="tlSetOn('${qid}','${escName}',this.value)" placeholder="0">
           OFF:<input type="number" min="0" max="${weeks.length}" value="${cycle.off||''}" onchange="tlSetOff('${qid}','${escName}',this.value)" placeholder="0">
-          <button class="tl-seed-btn" onclick="tlSeedDefaults('${qid}','${escName}')" title="${masterHint}">↻</button>
         </div>
       </div>
       <div class="tl-cells">${cells}</div>
@@ -764,19 +754,19 @@ export function pTimeline(){
     <div class="card-title">
       <span class="ico">🗓</span> Timeline — ${qLabel} · ${yCompounds.length} compounds · ${weeks.length} weeks
       <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">
-        Total: <span style="color:var(--acc)">${grandTotalVials} vial</span> · ${rpM(grandTotalCost)}
+        Total vial: <span style="color:var(--acc)">${grandTotalVials}</span>
       </span>
     </div>
     <div class="tl-legend">
       <span><span class="tl-sw tl-sw-on"></span> ON cycle</span>
       <span><span class="tl-sw tl-sw-off"></span> OFF (washout)</span>
       <span><span class="tl-sw tl-sw-inactive"></span> Inactive (ON belum di-set)</span>
-      <span style="margin-left:auto">💡 Set <b>ON/OFF</b> per compound (klik <b>↻</b> untuk default master) · <b>Click cell</b> untuk edit dose</span>
+      <span style="margin-left:auto">💡 Set <b>ON/OFF</b> per compound · <b>Click cell</b> untuk override dose</span>
     </div>
     <div class="tl-wrap"><div class="tl-grid">${wkRow}${rows}</div></div>
     <div class="note" style="margin-top:8px;font-size:10px;color:var(--t3);line-height:1.5">
       <b>Per-quarter scope</b>: pattern cycle scoped ke ${qLabel} aja. Pindah quarter di card row atas untuk plan quarter lain.
-      <b>ON/OFF</b>: lo set manual per compound (jumlah minggu). Tombol <b>↻</b> isi dengan master suggestion dari <code>on_cycle</code>/<code>off_cycle</code> CSV.
+      <b>ON/OFF</b>: lo set manual per compound (jumlah minggu). OFF=0 = one-shot (gak loop).
       <b>Dose default</b>: cell ON otomatis isi value <code>weekly_total</code> peptide. <b>Click cell</b> untuk override (saved ke <code>custom_doses</code> — butuh login).
       <b>Vial calc</b>: ⌈total dose ÷ vial_size⌉.
     </div>
