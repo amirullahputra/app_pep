@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Peptide Master FATLOSS</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/style.css?v=18">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -59,15 +59,6 @@
       <textarea class="modal-input" id="ce-mechanism" rows="2" style="margin:0;resize:vertical;font-size:11px"></textarea>
     </label>
 
-    <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px">Sport Profile (0–5)</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
-      <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">Z2<input class="modal-input" id="ce-z2" type="number" min="0" max="5" step="1" style="margin:0;text-align:center"></label>
-      <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">Power<input class="modal-input" id="ce-pw" type="number" min="0" max="5" step="1" style="margin:0;text-align:center"></label>
-      <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">Recov<input class="modal-input" id="ce-rc" type="number" min="0" max="5" step="1" style="margin:0;text-align:center"></label>
-      <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">Horm<input class="modal-input" id="ce-hr" type="number" min="0" max="5" step="1" style="margin:0;text-align:center"></label>
-      <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">CNS<input class="modal-input" id="ce-cn" type="number" min="0" max="5" step="1" style="margin:0;text-align:center"></label>
-    </div>
-
     <label style="font-size:10px;font-weight:700;color:var(--t2);display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
       Risk Note
       <input class="modal-input" id="ce-risk" style="margin:0">
@@ -92,8 +83,9 @@
       <label style="font-size:10px;color:var(--t2);display:flex;flex-direction:column;gap:3px">Timing Note<input class="modal-input" id="ce-timing" style="margin:0"></label>
     </div>
 
-    <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px">Doses per Minggu (mg/minggu)</div>
-    <div id="ce-doses-table" style="max-height:200px;overflow-y:auto;border:1px solid var(--bdr);border-radius:var(--r2);background:var(--bg2);padding:8px;margin-bottom:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px"></div>
+    <div style="font-size:10px;color:var(--t3);margin-bottom:12px;padding:8px;background:var(--bg2);border-radius:var(--r2)">
+      💡 Dose schedule per minggu, sport profile (Z2/PW/RC/HR/CN), dan score F1/F2/F3 sudah di-drop dari schema (v2). Dose akan input manual via tab Timeline di session berikutnya.
+    </div>
 
     <div class="modal-err" id="cmp-edit-err"></div>
     <div class="modal-row">
@@ -149,9 +141,9 @@
 
 </div><!-- /app -->
 
-<script type="module" src="js/main.js?v=17"></script>
+<script type="module" src="js/main.js?v=18"></script>
 
 <div id="app-debug" style="position:fixed;bottom:18px;right:8px;font-size:10px;color:#444;background:rgba(255,255,255,.85);border:1px solid #ccc;border-radius:4px;padding:3px 8px;font-family:'JetBrains Mono',monospace;z-index:9998;max-width:60vw">starting...</div>
-<div id="app-version" style="position:fixed;bottom:4px;right:8px;font-size:9px;color:#999;opacity:.5;font-family:'JetBrains Mono',monospace;pointer-events:none;z-index:9999">v=17</div>
+<div id="app-version" style="position:fixed;bottom:4px;right:8px;font-size:9px;color:#999;opacity:.5;font-family:'JetBrains Mono',monospace;pointer-events:none;z-index:9999">v=18</div>
 </body>
 </html>

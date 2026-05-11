@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=17';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=18';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,11 +10,11 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
-} from './state.js?v=17';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=17';
+} from './state.js?v=18';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=18';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=17';
+import * as stateModule from './state.js?v=18';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -252,18 +252,12 @@ export function pDecision(){
   const showSeedBanner = DM.seedBanner[qid];
   const qLabel = quarterLabel(qid);
 
-  const sportScoreOf = (name) => {
-    const s = SP[name];
-    if(!s) return 0;
-    return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
-  };
-
+  // Schema v2: sport_*/score_*/doses_jsonb dropped. Card cuma tampilkan
+  // nama + category color. Cost preview disabled sampai dose schedule
+  // di-input via Timeline tab.
   const compoundCard = (c, source) => {
     const inLib = source === 'library';
     const inSelected = source === 'selected';
-    const sportScore = sportScoreOf(c.name);
-    const costInfo = costForQuarter(c.name, qid);
-    const costStr = costInfo.cost > 0 ? rpM(costInfo.cost) : '—';
     const isSelected = selectedSet.has(c.name);
     const dimClass = inLib && isSelected ? ' in-stage' : '';
     const clickHandler = inLib
@@ -278,9 +272,7 @@ export function pDecision(){
       ondragstart="onDmDragStart(event,'${c.name.replace(/'/g,"\\'")}','${source}')">
       <div class="dm-card-name" title="${c.name}">${c.name}</div>
       <div class="dm-card-meta">
-        ${inLib ? `<span class="dm-cat-pill ${c.cat}">${(CAT[c.cat]?.n||c.cat).slice(0,3)}</span>` : ''}
-        <span class="dm-card-cost">${costStr}</span>
-        <span class="dm-card-sport">★${sportScore}</span>
+        <span class="dm-cat-pill ${c.cat}">${(CAT[c.cat]?.n||c.cat).slice(0,3)}</span>
         ${removeBtn}
       </div>
     </div>`;
@@ -407,6 +399,16 @@ export function pVial(){
     <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--warn)">
       <div style="font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--warn)">${expiredCount}</div>
       <div style="font-size:10px;color:var(--t2);font-weight:700">EXPIRED</div>
+    </div>
+  </div>`;
+
+  // ── DOSE SCHEDULE BANNER (schema v2 — doses_jsonb dropped) ──
+  const doseSchedBanner = `
+  <div class="conflict-banner cb-warn" style="margin-bottom:12px">
+    <div class="cb-ico">⏳</div>
+    <div>
+      <div class="cb-title">Forecast vial pakai dose schedule yang belum di-input</div>
+      <div style="font-size:11px;color:var(--t1)">Schema v2: dose per-week akan di-input manual via tab <b>Timeline</b> (UI sedang di-build). Sampai itu, kolom "weeks until empty" dan "vial needed forecast" akan tampil 0/—. Inventory manual tracking di tab Stok/Rekon tetap jalan normal.</div>
     </div>
   </div>`;
 
@@ -593,6 +595,7 @@ export function pVial(){
   </div>`;
 
   return`
+  ${doseSchedBanner}
   ${summaryBar}
   ${tabBar}
   ${vt==='stok'?stokPanel:reconPanel}
@@ -660,57 +663,28 @@ export function pVial(){
 // P3 — TIMELINE
 // ──────────────────────────────────────────
 export function pTimeline(){
-  const weeks=Array.from({length:56},(_,i)=>i+1);
-
-  // Quarter bands — derived dari mapping week→quarter (W1 = 2026-07-06 = Q3 2026)
-  // Group consecutive weeks dengan same quarter
-  const qBandColors = { 1:'rgba(99,102,241,.7)', 2:'rgba(245,158,11,.7)', 3:'rgba(255,107,53,.7)', 4:'rgba(16,185,129,.7)' };
-  const qSegs = [];
-  weeks.forEach(w => {
-    const qid = quarterFromWeek(w);
-    if(!qid) return;
-    const last = qSegs[qSegs.length-1];
-    if(last && last.qid === qid){ last.e = w; }
-    else { qSegs.push({ qid, s: w, e: w, qNum: parseInt(qid.charAt(1)) }); }
-  });
-
-  const phBand = `<div class="gantt-ph-row">${qSegs.map(q => {
-    const col = qBandColors[q.qNum] || 'rgba(67,97,238,.7)';
-    return `<div class="gantt-ph-seg" style="flex:${q.e-q.s+1};background:${col};color:#fff">${quarterLabel(q.qid)}</div>`;
-  }).join('')}</div>`;
-  const wkRow=`<div class="gantt-wk-row">${weeks.map(w=>`<div class="gantt-wk">${w%4===0?'W'+w:''}</div>`).join('')}</div>`;
-
-  const rows=COMPOUNDS.map(c=>{
-    const unit=VSPECS[c.name]?.unit||'mg';
-    const cells=weeks.map(w=>{
-      const defaultDose=c.d[w];
-      const activeDose=getDose(c.name,w);
-      const isCustom=isCustomDose(c.name,w);
-      const hasAnyDose=defaultDose||activeDose;
-      if(!hasAnyDose)return`<div class="g-cell g-off" onclick="openDoseEdit('${c.name}',${w})" title="W${w}: OFF · Klik untuk set dose"></div>`;
-      const qid2 = quarterFromWeek(w);
-      const prio = getPrio(c.name, qid2);
-      const wajib = prio>=60;
-      const dispDose = activeDose ?? defaultDose;
-      // gantt color tier by quarter-year (just first digit of quarter num)
-      const qNum = qid2 ? parseInt(qid2.charAt(1)) : 1;
-      return `<div class="g-cell g-${qNum}${wajib?' w':''}${isCustom?' g-custom':''}" onclick="openDoseEdit('${c.name}',${w})" title="${c.name} W${w}: ${dispDose}${unit}${isCustom?' ✎Custom':''} · ${qid2?quarterLabel(qid2):'—'} · Prio: ${prio} · Klik untuk edit"></div>`;
-    }).join('');
-    const hasCustom=Object.keys(customDoses[c.name]||{}).length>0;
-    return`<div class="g-row">
-      <div class="g-lbl"><span class="lb ${CAT[c.cat].cls}" style="font-size:8px">${c.cat.toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:600">${c.name}</span>${hasCustom?'<span style="font-size:8px;color:var(--hor);font-weight:800;margin-left:3px">✎</span>':''}</div>
-      <div class="g-cells">${cells}</div>
-    </div>`;
-  }).join('');
-
-  return`<div class="card">
-    <div class="card-title"><span class="ico">🗓</span> Timeline Gantt — W1–W56 · 26 Compounds</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-      ${[['rgba(255,107,53,.35)','F1 aktif (dim)'],['rgba(245,158,11,.35)','F2 aktif (dim)'],['rgba(16,185,129,.35)','F3 aktif (dim)'],['var(--f1)','Priority ≥60 WAJIB'],['var(--bg3)','OFF'],['var(--hor)','✎ Custom dose']].map(([c,l])=>
-      `<div style="display:flex;align-items:center;gap:5px"><div style="width:14px;height:14px;border-radius:3px;background:${c};flex-shrink:0"></div><span style="font-size:10px;color:var(--t2)">${l}</span></div>`).join('')}
+  // Schema v2 (v=18): doses_jsonb dropped dari compounds table. Timeline UI
+  // yang lama (gantt grid yang baca c.d[w]) sudah ga relevan — dose schedule
+  // akan input MANUAL via UI baru disini di session berikutnya.
+  //
+  // Roadmap rough untuk session berikutnya:
+  //   1. Bikin table baru `dose_schedule (user_id, compound_id, week, dose, unit)`
+  //   2. UI grid compound × week 56, inline edit per cell
+  //   3. Save trigger Budget/Vial recompute
+  //
+  // Sampai itu, panel ini placeholder. Decision Matrix, Compounds, Auth tetap jalan.
+  return `<div class="card">
+    <div class="card-title"><span class="ico">🗓</span> Timeline — Manual Dose Entry</div>
+    <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.7">
+      <div style="font-size:48px;margin-bottom:12px">🔧</div>
+      <div style="font-size:15px;font-weight:800;color:var(--t0);margin-bottom:6px">Refactor in progress</div>
+      <div style="max-width:480px;margin:0 auto 14px">
+        Schema sudah di-slim ke <b>14 kolom</b> (v2). Dose schedule per minggu sekarang akan di-input manual lewat UI baru yang sedang dibangun di tab ini.
+      </div>
+      <div style="font-size:11px;color:var(--t3);max-width:520px;margin:0 auto">
+        Sementara Decision Matrix tetap bisa pilih compound per quarter. Budget &amp; Vial Planner menunggu dose schedule sebelum bisa hitung biaya. Compound master library tetap editable di tab Compounds.
+      </div>
     </div>
-    <div class="gantt-wrap"><div class="gantt-grid">${phBand}${wkRow}<div style="height:1px;background:var(--bdr);margin:3px 0"></div>${rows}</div></div>
-    <div class="note">Klik cell mana saja untuk edit dose. ✎ = dose sudah di-custom. "Reset Default" untuk balik ke dosis protokol asal. Butuh login untuk simpan.</div>
   </div>`;
 }
 
@@ -721,6 +695,16 @@ export function pBudget(){
   const qid = S.budQuarter || S.quarter;
   const cap = S.budCap;
   const qLabel = quarterLabel(qid);
+
+  // Schema v2: dose schedule (doses_jsonb) dropped — cost calc always 0.
+  // Show banner pointing user ke Timeline tab (manual dose entry — next session).
+  const doseBanner = `<div class="conflict-banner cb-warn" style="margin-bottom:14px">
+    <div class="cb-ico">⏳</div>
+    <div>
+      <div class="cb-title">Dosis per minggu belum di-input</div>
+      <div style="font-size:11px;color:var(--t1)">Schema sudah di-slim ke v2. Dose schedule akan di-input manual via tab <b>Timeline</b> (UI sedang di-build). Sampai itu, semua angka biaya di sini akan menunjukkan <b>—</b>.</div>
+    </div>
+  </div>`;
 
   // Filter by Decision Matrix selection untuk quarter ini.
   const dmSelected = DM.selectedByQuarter[qid] || new Set();
@@ -804,6 +788,7 @@ export function pBudget(){
   suggested.forEach(n=>stateModule._lastSuggested.push(n));
 
   return`
+  ${doseBanner}
   <div class="bud-controls">
     <div class="bud-val-row"><div class="bud-val" id="budDisp">${rpM(cap)}</div><div class="bud-lbl">budget cap</div></div>
     <input type="range" min="5000000" max="200000000" step="5000000" value="${cap}"
@@ -883,26 +868,14 @@ export function pCompounds(){
   const legend = `<div class="cmp-legend">
     <span class="cmp-tag cmp-tag-S">S</span> Static (master, jarang berubah)
     <span class="cmp-tag cmp-tag-D" style="margin-left:10px">D</span> Dynamic (sering update via app)
-    <span style="margin-left:14px;font-size:10px;color:var(--t3)">⚠ Score F1/F2/F3 legacy phase-based — quarter rework next session</span>
+    <span style="margin-left:14px;font-size:10px;color:var(--t3)">Schema v2 — 12 kolom render (id/created_at tidak ditampilkan)</span>
   </div>`;
 
-  // Render mini sport profile (5 dots colored by score 0-5)
-  const sportDots = (sp) => {
-    return ['z2','pw','rc','hr','cn'].map(k => {
-      const v = sp[k] || 0;
-      const tooltip = `${k.toUpperCase()}: ${v}/5`;
-      return `<span class="sp-dot sp-${v}" title="${tooltip}"></span>`;
-    }).join('');
-  };
-
-  // Render rows
+  // Render rows — 14-col schema (id/created_at hidden, 12 visible cols + action)
   const rows = filtered.map(c => {
-    const sp = SP[c.name] || {z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
-    const sc = SC[c.name] || {};
     const vspec = VSPECS[c.name] || {};
     const shelf = SHELF_LIFE[c.name] || {};
-    const f1 = sc.f1?.p || 0, f2 = sc.f2?.p || 0, f3 = sc.f3?.p || 0;
-    const doseCount = c.d ? Object.keys(c.d).length : 0;
+    const sp = SP[c.name] || {risk:''};
     const mech = MECHS[c.name] || '';
     const mechTrunc = mech.length > 60 ? mech.slice(0,57)+'…' : mech;
     const notes = c.notes || '';
@@ -915,47 +888,41 @@ export function pCompounds(){
       </td>
       <td><span class="lb ${CAT[c.cat]?.cls||''}">${CAT[c.cat]?.n||c.cat||'—'}</span></td>
       <td class="ellipsis-cell" title="${mech.replace(/"/g,'&quot;')}">${mechTrunc||'—'}</td>
-      <td><div class="sport-dots-row">${sportDots(sp)}</div></td>
       <td class="ellipsis-cell" title="${(sp.risk||'').replace(/"/g,'&quot;')}">${sp.risk||'—'}</td>
-      <td class="cmp-score-cell"><span style="color:${scCol(f1)}">${f1}</span>/<span style="color:${scCol(f2)}">${f2}</span>/<span style="color:${scCol(f3)}">${f3}</span></td>
       <td class="ellipsis-cell" title="${(c.hiv_notes||'').replace(/"/g,'&quot;')}">${c.hiv_notes||'—'}</td>
-      <td>${shelf.shelf?shelf.shelf+'d':'—'}</td>
       <td class="ellipsis-cell" title="${notes.replace(/"/g,'&quot;')}">${notesTrunc||'—'}</td>
       <td>${vspec.unit||'—'}</td>
+      <td>${shelf.shelf?shelf.shelf+'d':'—'}</td>
       <td class="dyn-cell">${vspec.vSize||'—'}</td>
       <td class="dyn-cell">${vspec.vPrice>0?rpM(vspec.vPrice):'—'}</td>
       <td class="dyn-cell ellipsis-cell" title="${(vspec.label||'').replace(/"/g,'&quot;')}">${vspec.label||'—'}</td>
       <td class="dyn-cell ellipsis-cell" title="${(shelf.timing||'').replace(/"/g,'&quot;')}">${shelf.timing||'—'}</td>
-      <td class="dyn-cell">${doseCount>0?`<span style="color:var(--f3);font-weight:700">${doseCount}w</span>`:'<span style="color:var(--t3)">—</span>'}</td>
       <td><button class="cmp-edit-btn" onclick="openCmpEdit('${escName}')">✏️ Edit</button></td>
     </tr>`;
   }).join('');
 
-  // Table header dengan tag visual per kolom
+  // 12 visible cols + Action (id/created_at hidden as META)
   const header = `
     <thead>
       <tr class="cmp-tbl-grp-row">
-        <th class="cmp-tbl-sticky cmp-grp-id" colspan="2">🔵 IDENTITY</th>
+        <th class="cmp-tbl-sticky cmp-grp-id">🔵 ID</th>
         <th class="cmp-grp-static" colspan="7">🟢 STATIC — master data</th>
-        <th class="cmp-grp-dynamic" colspan="6">🟠 DYNAMIC — frequently update</th>
+        <th class="cmp-grp-dynamic" colspan="4">🟠 DYNAMIC — frequently update</th>
         <th class="cmp-grp-action">⚙️</th>
       </tr>
       <tr class="cmp-tbl-hdr-row">
         <th class="cmp-tbl-sticky">Name <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Cat <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Mechanism <span class="cmp-tag cmp-tag-S">S</span></th>
-        <th>Sport (Z2/PW/RC/HR/CN) <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Risk <span class="cmp-tag cmp-tag-S">S</span></th>
-        <th>F1/F2/F3 ⚠</th>
         <th>HIV <span class="cmp-tag cmp-tag-S">S</span></th>
-        <th>Shelf <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Notes <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Unit <span class="cmp-tag cmp-tag-S">S</span></th>
+        <th>Shelf <span class="cmp-tag cmp-tag-S">S</span></th>
         <th>Size <span class="cmp-tag cmp-tag-D">D</span></th>
         <th>Price <span class="cmp-tag cmp-tag-D">D</span></th>
         <th>Label <span class="cmp-tag cmp-tag-D">D</span></th>
         <th>Timing <span class="cmp-tag cmp-tag-D">D</span></th>
-        <th>Doses <span class="cmp-tag cmp-tag-D">D</span></th>
         <th>Action</th>
       </tr>
     </thead>`;
@@ -964,12 +931,12 @@ export function pCompounds(){
     <div class="cmp-tbl-wrap">
       <table class="cmp-tbl">
         ${header}
-        <tbody>${rows||'<tr><td colspan="16" style="text-align:center;padding:2rem;color:var(--t3)">Tidak ada compound match filter</td></tr>'}</tbody>
+        <tbody>${rows||'<tr><td colspan="13" style="text-align:center;padding:2rem;color:var(--t3)">Tidak ada compound match filter</td></tr>'}</tbody>
       </table>
     </div>
     <div class="cmp-info-footer">
-      <strong>📊 Schema Audit</strong>: ${COMPOUNDS.length} compounds · 15 USED fields shown · 28 LEGACY columns di DB tidak dirender (next session cleanup).
-      <br><span style="color:var(--t3);font-size:10px">Hover cell untuk detail lengkap. Klik Edit untuk modal full (semua field editable).</span>
+      <strong>📊 Schema v2</strong>: ${COMPOUNDS.length} compounds · 14 kolom DB total (id, created_at, 8 STATIC, 4 DYNAMIC). Dose schedule + sport profile + score: di-drop, akan rework next session (manual entry via Timeline).
+      <br><span style="color:var(--t3);font-size:10px">Hover cell untuk detail lengkap. Klik Edit untuk modal full.</span>
     </div>`;
 
   return `${filterBar}${legend}${tableHtml}`;
@@ -978,7 +945,7 @@ export function pCompounds(){
 // ── COMPOUND EDIT MODAL ──
 window.openCmpEdit = function(name){
   const c=COMPOUNDS.find(x=>x.name===name);
-  const sp=SP[name]||{z2:0,pw:0,rc:0,hr:0,cn:0,risk:''};
+  const sp=SP[name]||{risk:''};
   const vs=VSPECS[name]||{unit:'mg',vSize:10,vPrice:0,label:''};
   const sl=SHELF_LIFE[name]||{shelf:0,timing:''};
   if(!c)return;
@@ -987,11 +954,6 @@ window.openCmpEdit = function(name){
   document.getElementById('ce-name').value=name;
   document.getElementById('ce-cat').value=c.cat||'off';
   document.getElementById('ce-mechanism').value=MECHS[name]||'';
-  document.getElementById('ce-z2').value=sp.z2||0;
-  document.getElementById('ce-pw').value=sp.pw||0;
-  document.getElementById('ce-rc').value=sp.rc||0;
-  document.getElementById('ce-hr').value=sp.hr||0;
-  document.getElementById('ce-cn').value=sp.cn||0;
   document.getElementById('ce-risk').value=sp.risk||'';
   document.getElementById('ce-unit').value=vs.unit||'mg';
   document.getElementById('ce-vsize').value=vs.vSize||10;
@@ -1000,17 +962,6 @@ window.openCmpEdit = function(name){
   document.getElementById('ce-shelf').value=sl.shelf||0;
   document.getElementById('ce-timing').value=sl.timing||'';
   document.getElementById('cmp-edit-err').textContent='';
-
-  // Build doses grid (W1–W56)
-  const doses=c.d||{};
-  const grid=document.getElementById('ce-doses-table');
-  grid.innerHTML='';
-  for(let w=1;w<=56;w++){
-    const label=document.createElement('label');
-    label.style.cssText='font-size:9px;color:var(--t2);display:flex;flex-direction:column;gap:2px';
-    label.innerHTML=`W${w}<input type="number" min="0" step="0.1" data-week="${w}" value="${doses[w]||doses[String(w)]||''}" style="padding:4px;border-radius:4px;border:1px solid var(--bdr);background:var(--bg1);color:var(--t1);font-size:10px;width:100%;box-sizing:border-box">`;
-    grid.appendChild(label);
-  }
   document.getElementById('cmp-edit-modal').classList.add('open');
 };
 
@@ -1024,22 +975,10 @@ window.saveCmpEdit = async function(){
   const errEl=document.getElementById('cmp-edit-err');
   errEl.textContent='Menyimpan...';
 
-  // Build doses_jsonb from inputs
-  const dosesInputs=document.querySelectorAll('#ce-doses-table input[data-week]');
-  const doses_jsonb={};
-  dosesInputs.forEach(inp=>{
-    const v=parseFloat(inp.value);
-    if(!isNaN(v)&&v>0) doses_jsonb[inp.dataset.week]=v;
-  });
-
+  // Schema v2 — sport_*, doses_jsonb sudah di-DROP. Cuma 9 editable fields.
   const updates={
     category: document.getElementById('ce-cat').value,
     mechanism: document.getElementById('ce-mechanism').value.trim()||null,
-    sport_z2: parseInt(document.getElementById('ce-z2').value)||0,
-    sport_pw: parseInt(document.getElementById('ce-pw').value)||0,
-    sport_rc: parseInt(document.getElementById('ce-rc').value)||0,
-    sport_hr: parseInt(document.getElementById('ce-hr').value)||0,
-    sport_cn: parseInt(document.getElementById('ce-cn').value)||0,
     risk_text: document.getElementById('ce-risk').value.trim()||null,
     vial_unit: document.getElementById('ce-unit').value,
     vial_size: parseFloat(document.getElementById('ce-vsize').value)||10,
@@ -1047,7 +986,6 @@ window.saveCmpEdit = async function(){
     vial_label: document.getElementById('ce-vlabel').value.trim()||null,
     shelf_life_days: parseInt(document.getElementById('ce-shelf').value)||null,
     timing_note: document.getElementById('ce-timing').value.trim()||null,
-    doses_jsonb,
   };
 
   try{

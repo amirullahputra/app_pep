@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=17';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS } from './state.js?v=17';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=18';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS } from './state.js?v=18';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -23,37 +23,24 @@ async function restFetch(table, query=''){
   return res.json();
 }
 
-// ── DYNAMIC PEP DATA LOAD (compounds + phases + redundancy_rules) ──
+// ── DYNAMIC PEP DATA LOAD (compounds + redundancy_rules) ──
+// Schema slimdown v=18: compounds table sekarang 14 kolom (lihat
+// supabase_setup/16_schema_slimdown_v2.sql). doses_jsonb, sport_*, score_*,
+// sort_order semua di-DROP. Dose schedule akan input manual via Timeline tab
+// (separate future session). Budget/Vial otomatis kosong sampai dose di-input.
 let _pepLoaded = false;
 let _quartersLoaded = false;
 let _quartersCache = null;
 
-function computeCostsPerPhase(compoundRow, phaseRows){
-  const out = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };
-  const doses = compoundRow.doses_jsonb || {};
-  const vSize = compoundRow.vial_size || 10;
-  const vPrice = compoundRow.vial_price_idr || 0;
+// Explicit columns matching 14-col schema v2. Avoid `select=*` supaya
+// safe kalau ada kolom historikal slip masuk lagi (kita pakai DROP IF EXISTS).
+const COMPOUND_COLS = [
+  'id','created_at','name','category','mechanism','risk_text','hiv_notes',
+  'notes','vial_unit','shelf_life_days','vial_size','vial_price_idr',
+  'vial_label','timing_note'
+].join(',');
 
-  Object.entries(doses).forEach(([weekStr, dose]) => {
-    const wk = parseInt(weekStr);
-    const phase = (phaseRows||[]).find(p => wk >= p.week_start && wk <= p.week_end);
-    if(!phase) return;
-    const fk = 'f'+phase.phase_id;
-    if(!out[fk]) return;
-    out[fk].mg += parseFloat(dose) || 0;
-    out.tot.mg += parseFloat(dose) || 0;
-  });
-
-  ['f1','f2','f3'].forEach(p => {
-    if(out[p].mg > 0){
-      out[p].v = Math.ceil(out[p].mg / vSize);
-      out[p].cost = out[p].v * vPrice;
-    }
-  });
-  out.tot.v = out.f1.v + out.f2.v + out.f3.v;
-  out.tot.cost = out.f1.cost + out.f2.cost + out.f3.cost;
-  return out;
-}
+const EMPTY_COST = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };
 
 export async function loadAllPepData(){
   if(_pepLoaded) return;
@@ -62,13 +49,11 @@ export async function loadAllPepData(){
 
   // Plain fetch() bypass supa client — work in Chrome incognito where
   // GoTrueClient init can hang on navigator.locks/storage.
-  let compoundRows, phaseRows, ruleRows;
+  let compoundRows, ruleRows;
   try {
     dbg('fetch compounds...');
-    compoundRows = await restFetch('compounds', 'select=*&order=sort_order.asc.nullslast,name.asc');
-    dbg(`compounds:${compoundRows.length} · fetch phases...`);
-    phaseRows = await restFetch('phases', 'select=*&order=sort_order.asc');
-    dbg(`phases:${phaseRows.length} · fetch rules...`);
+    compoundRows = await restFetch('compounds', `select=${COMPOUND_COLS}&order=name.asc`);
+    dbg(`compounds:${compoundRows.length} · fetch rules...`);
     ruleRows = await restFetch('redundancy_rules', 'select=*&order=sort_order.asc');
     dbg(`rules:${ruleRows.length} · transforming...`);
   } catch(e){
@@ -76,19 +61,14 @@ export async function loadAllPepData(){
     throw e;
   }
 
-  // Build derived structures
+  // Build derived structures. SC/SP/dose schedule (d) di-stub kosong
+  // karena kolom-kolom itu sudah di-DROP dari schema. App tetap tidak crash
+  // (costForQuarter return 0, sport dots dan score render 0/blank).
   const SC={}, SP={}, MECHS={}, VSPECS={}, SHELF_LIFE={};
   const COMPOUNDS = [];
   compoundRows.forEach(r => {
-    SC[r.name] = {
-      f1:{r:r.score_f1||0, p:r.score_f1||0},
-      f2:{r:r.score_f2||0, p:r.score_f2||0},
-      f3:{r:r.score_f3||0, p:r.score_f3||0}
-    };
-    SP[r.name] = {
-      z2:r.sport_z2||0, pw:r.sport_pw||0, rc:r.sport_rc||0,
-      hr:r.sport_hr||0, cn:r.sport_cn||0, risk:r.risk_text||''
-    };
+    SC[r.name] = { f1:{r:0,p:0}, f2:{r:0,p:0}, f3:{r:0,p:0} };
+    SP[r.name] = { z2:0, pw:0, rc:0, hr:0, cn:0, risk: r.risk_text || '' };
     MECHS[r.name] = r.mechanism || '';
     VSPECS[r.name] = {
       unit:r.vial_unit||'mg', vSize:r.vial_size||10,
@@ -99,31 +79,19 @@ export async function loadAllPepData(){
     COMPOUNDS.push({
       name:r.name, cat:r.category||'off',
       hiv_notes:r.hiv_notes, notes:r.notes,
-      d: r.doses_jsonb || {},
-      c: computeCostsPerPhase(r, phaseRows),
+      d: {},               // doses_jsonb dropped — Timeline tab will input manual nanti
+      c: EMPTY_COST,       // costs always zero until dose schedule available
     });
   });
-
-  // Phase shape compatibility with old data.js (PHASES had id, cls, name, bf, wS, wE, wk, defisit, label, desc, col, selCls)
-  const PHASES = phaseRows.map(p => ({
-    id: parseInt(p.phase_id),
-    cls: p.color,
-    name: p.name,
-    bf: p.bf_range,
-    wS: p.week_start, wE: p.week_end, wk: p.total_weeks,
-    defisit: p.defisit, label: p.label, desc: p.description,
-    col: `var(--${p.color})`,
-    selCls: p.sel_class
-  }));
 
   const REDUNDANCY = ruleRows.map(r => ({
     id:r.id, lvl:r.level, title:r.title, body:r.body,
     rec:r.recommendation, cmps:r.compound_names||[], thresh:r.threshold||2
   }));
 
-  _setPepData({ phases:PHASES, compounds:COMPOUNDS, redundancy:REDUNDANCY, sc:SC, sp:SP, mechs:MECHS, vspecs:VSPECS, shelf:SHELF_LIFE });
+  _setPepData({ phases:[], compounds:COMPOUNDS, redundancy:REDUNDANCY, sc:SC, sp:SP, mechs:MECHS, vspecs:VSPECS, shelf:SHELF_LIFE });
   _pepLoaded = true;
-  console.info(`[db] Loaded ${COMPOUNDS.length} compounds, ${PHASES.length} phases, ${REDUNDANCY.length} rules`);
+  console.info(`[db] Loaded ${COMPOUNDS.length} compounds, ${REDUNDANCY.length} rules (schema v2 — dose schedule disabled)`);
 }
 
 export async function saveCompoundEdit(name, updates){
