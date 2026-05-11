@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=27';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=28';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=27';
-import * as stateModule from './state.js?v=27';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=27';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=28';
+import * as stateModule from './state.js?v=28';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=28';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=27';
+} from './supabase.js?v=28';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=27';
-import * as panelFns from './panels.js?v=27';
-import * as supaFns from './supabase.js?v=27';
+} from './panels.js?v=28';
+import * as panelFns from './panels.js?v=28';
+import * as supaFns from './supabase.js?v=28';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -300,6 +300,13 @@ window.tlSetOff = function(qid, name, value){
 window.tlSetStart = function(qid, name, value){
   if(typeof window.tlSetCycle === 'function'){
     window.tlSetCycle(qid, name, 'start', value);
+  }
+  renderPanels();
+  renderQuarterRow();
+};
+window.tlSetDose = function(qid, name, value){
+  if(typeof window.tlSetCycle === 'function'){
+    window.tlSetCycle(qid, name, 'dose', value);
   }
   renderPanels();
   renderQuarterRow();

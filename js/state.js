@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=27';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=28';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -309,6 +309,17 @@ export function parseWeeklyTotal(text){
   return {raw:text};
 }
 
+// Konversi dose dari satu unit ke unit lain (mcg ↔ mg)
+// Dipakai untuk normalize weekly_total dose ke vial_unit sebelum vial calc.
+export function doseInVialUnit(doseValue, doseUnit, vialUnit){
+  if(!doseUnit || !vialUnit || doseUnit.toLowerCase() === vialUnit.toLowerCase()) return doseValue;
+  const dU = doseUnit.toLowerCase();
+  const vU = vialUnit.toLowerCase();
+  if(dU === 'mcg' && vU === 'mg') return doseValue / 1000;
+  if(dU === 'mg' && vU === 'mcg') return doseValue * 1000;
+  return doseValue;  // IU, tablet — no conversion known
+}
+
 // Timeline state — per (quarter, compound) cycle config, in-memory (Phase B persist later)
 // Key format: `${qid}|${compoundName}` → { on, off, start } (semua dalam weeks)
 // start = 1-based week offset di dalam quarter (default 1 = mulai dari week pertama quarter)
@@ -323,6 +334,16 @@ export function tlGetCycle(qid, name){
 export function tlSetCycle(qid, name, field, value){
   const key = `${qid}|${name}`;
   if(!TL.cycles[key]) TL.cycles[key] = {on: 0, off: 0, start: 1};
+  if(field === 'dose'){
+    // DOSE override per quarter (in vial_unit). Empty/0 = fallback ke master weekly_total.
+    const v = parseFloat(value);
+    if(isNaN(v) || v <= 0){
+      delete TL.cycles[key].dose;
+    } else {
+      TL.cycles[key].dose = v;
+    }
+    return;
+  }
   const v = parseInt(value);
   const qWeeks = weeksInQuarter(qid).length || 56;
   if(field === 'start'){
@@ -372,15 +393,22 @@ export function tlCellStatus(week, compound, qid){
   return (delta % cycleLen) < onLen ? 'on' : 'off';
 }
 
-// Hitung dose untuk week tertentu: custom > auto (weekly_total kalau ON) > 0
+// Hitung dose untuk week tertentu: custom > override per quarter > master weekly_total > 0
+// Output selalu dalam vial_unit (mg/mcg/IU/tablet sesuai VSPECS[name].unit).
 export function tlDoseForWeek(week, compound, qid){
   if(!compound) return 0;
   const custom = customDoses[compound.name]?.[week];
-  if(custom !== undefined) return custom;
+  if(custom !== undefined) return custom;  // custom_doses disimpan dalam vial_unit
   const status = tlCellStatus(week, compound, qid);
   if(status !== 'on') return 0;
+  const cycle = tlGetCycle(qid, compound.name);
+  // Per-quarter override (dalam vial_unit)
+  if(cycle.dose !== undefined && cycle.dose > 0) return cycle.dose;
+  // Fallback: parse master weekly_total + convert ke vial_unit
   const wt = parseWeeklyTotal(compound.weekly_total);
-  return wt?.value || 0;
+  if(!wt?.value) return 0;
+  const vialUnit = VSPECS[compound.name]?.unit || 'mg';
+  return doseInVialUnit(wt.value, wt.unit, vialUnit);
 }
 
 // Effective cycle: kalau user belum set via Timeline UI, fallback ke master CSV defaults.
@@ -401,14 +429,26 @@ export function tlGetCycleEffective(qid, name){
 }
 
 // Cost untuk compound di quarter — pakai effective cycle + weekly_total + vial_price.
+// All doses normalized ke vial_unit untuk math correctness.
 // Replaces buggy costForQuarter() yang ngandelin c.d[w] (dropped).
 export function tlCostForQuarter(compound, qid){
   if(!compound || !qid) return {totalDose:0, vials:0, cost:0, unit:'mg'};
   const weeks = weeksInQuarter(qid);
   if(weeks.length === 0) return {totalDose:0, vials:0, cost:0, unit:'mg'};
   const cycle = tlGetCycleEffective(qid, compound.name);
-  const wt = parseWeeklyTotal(compound.weekly_total);
-  const perWeekDose = wt?.value || 0;
+  const vs = VSPECS[compound.name];
+  const vSize = vs?.vSize || 1;
+  const unit = vs?.unit || 'mg';
+  const vPrice = vs?.vPrice || 0;
+  // Override per quarter atau fallback ke master weekly_total (convert ke vial_unit)
+  const userOverride = TL.cycles[`${qid}|${compound.name}`]?.dose;
+  let perWeekDose;
+  if(userOverride !== undefined && userOverride > 0){
+    perWeekDose = userOverride;
+  } else {
+    const wt = parseWeeklyTotal(compound.weekly_total);
+    perWeekDose = wt?.value ? doseInVialUnit(wt.value, wt.unit, unit) : 0;
+  }
   const startOffset = (cycle.start || 1) - 1;  // 0-based offset
   let totalDose = 0;
   weeks.forEach((w, i) => {
@@ -422,10 +462,6 @@ export function tlCostForQuarter(compound, qid){
     else isOn = (idx % (cycle.on + cycle.off)) < cycle.on;
     if(isOn) totalDose += perWeekDose;
   });
-  const vs = VSPECS[compound.name];
-  const vSize = vs?.vSize || 1;
-  const unit = vs?.unit || 'mg';
-  const vPrice = vs?.vPrice || 0;
   const vials = (totalDose > 0 && vSize > 0) ? Math.ceil(totalDose / vSize) : 0;
   const cost = vials * vPrice;
   return {totalDose, vials, cost, unit};

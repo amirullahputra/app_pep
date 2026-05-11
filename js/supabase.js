@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=27';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus } from './state.js?v=27';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=28';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=28';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -265,15 +265,11 @@ let _doseEditTarget={name:'',week:0,defaultDose:0,unit:''};
 
 export function openDoseEdit(compoundName,week){
   const c=COMPOUNDS.find(x=>x.name===compoundName);
-  // Auto default: kalau week ini ON cycle, pakai weekly_total. Else 0.
-  // Fallback ke c.d[week] (legacy doses_jsonb) kalau ada.
+  // Auto default: pakai tlDoseForWeek (handles cycle override + master weekly_total + unit conv).
+  // Output sudah dalam vial_unit, jadi user edit dalam vial_unit yang konsisten.
   let defaultDose = c?.d?.[week] || 0;
   if(!defaultDose && c){
-    const status = tlCellStatus(week, c, S.quarter);
-    if(status === 'on'){
-      const wt = parseWeeklyTotal(c.weekly_total);
-      defaultDose = wt?.value || 0;
-    }
+    defaultDose = tlDoseForWeek(week, c, S.quarter) || 0;
   }
   const currentDose=getDose(compoundName,week)??defaultDose;
   const unit=VSPECS[compoundName]?.unit||'mg';

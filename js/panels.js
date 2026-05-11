@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=27';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=28';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=27';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=27';
+} from './state.js?v=28';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=28';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=27';
+import * as stateModule from './state.js?v=28';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -727,8 +727,13 @@ export function pTimeline(){
 
   const rows = yCompounds.map(c => {
     const cycle = tlGetCycle(qid, c.name);
+    const vialUnit = VSPECS[c.name]?.unit || 'mg';
+    // Master weekly_total converted to vial_unit (for placeholder)
     const wt = parseWeeklyTotal(c.weekly_total);
-    const wtLabel = wt?.value ? `${wt.value}${wt.unit}/wk` : (c.weekly_total || '—');
+    const masterDoseInVU = wt?.value ? doseInVialUnit(wt.value, wt.unit, vialUnit) : 0;
+    const doseFmt = (v) => v >= 100 ? Math.round(v) : v >= 1 ? Math.round(v*10)/10 : Math.round(v*100)/100;
+    const wtLabel = masterDoseInVU > 0 ? `${doseFmt(masterDoseInVU)}${vialUnit}/wk` : (c.weekly_total || '—');
+    const currentDose = cycle.dose !== undefined ? cycle.dose : masterDoseInVU;
     const escName = c.name.replace(/'/g,"\\'");
 
     const cells = weeks.map(w => {
@@ -739,8 +744,8 @@ export function pTimeline(){
       const cls = status==='on' ? `tl-cell tl-on ${catCls}${hasCustom?' tl-custom':''}`
                 : status==='off' ? `tl-cell tl-off${hasCustom?' tl-custom':''}`
                 : `tl-cell tl-inactive${hasCustom?' tl-custom':''}`;
-      const doseStr = dose > 0 ? `${dose}` : '';
-      const tip = `${c.name} W${w} · ${status.toUpperCase()}${dose>0?` · ${dose}${wt?.unit||''}`:''}${hasCustom?' (custom)':''} · click to edit`;
+      const doseStr = dose > 0 ? doseFmt(dose) : '';
+      const tip = `${c.name} W${w} · ${status.toUpperCase()}${dose>0?` · ${doseFmt(dose)}${vialUnit}`:''}${hasCustom?' (custom)':''} · click to edit`;
       return `<div class="${cls}" title="${tip}" onclick="openDoseEdit('${escName}',${w})">${doseStr}</div>`;
     }).join('');
 
@@ -750,7 +755,7 @@ export function pTimeline(){
     const grandTotalDoseObj = {};  // placeholder, not used
 
     const summaryHtml = sum.totalDose > 0
-      ? `<span class="tl-sum-d">${Math.round(sum.totalDose*10)/10}<small>${sum.unit}</small></span><span class="tl-sum-v">${sum.vials} vial</span>`
+      ? `<span class="tl-sum-d">${doseFmt(sum.totalDose)}<small>${sum.unit}</small></span><span class="tl-sum-v">${sum.vials} vial</span>`
       : `<span class="tl-sum-empty">—</span>`;
 
     return `<div class="tl-row">
@@ -762,7 +767,9 @@ export function pTimeline(){
         <div class="tl-cycle-input">
           ON:<input type="number" min="0" max="${weeks.length}" value="${cycle.on||''}" onchange="tlSetOn('${qid}','${escName}',this.value)" placeholder="0">
           OFF:<input type="number" min="0" max="${weeks.length}" value="${cycle.off||''}" onchange="tlSetOff('${qid}','${escName}',this.value)" placeholder="0">
-          START:<input type="number" min="1" max="${weeks.length}" value="${cycle.start||1}" onchange="tlSetStart('${qid}','${escName}',this.value)" placeholder="1" title="Week ke berapa di quarter ini cycle mulai (1=W1 quarter ini)">
+          START:<input type="number" min="1" max="${weeks.length}" value="${cycle.start||1}" onchange="tlSetStart('${qid}','${escName}',this.value)" placeholder="1" title="Week mulai cycle di quarter ini (1=W1)">
+          DOSE:<input type="number" min="0" step="0.01" value="${cycle.dose!==undefined?cycle.dose:''}" onchange="tlSetDose('${qid}','${escName}',this.value)" placeholder="${masterDoseInVU>0?doseFmt(masterDoseInVU):'0'}" title="Override dosis per minggu (${vialUnit}). Kosong = pakai default master.">
+          <span class="tl-unit-hint">${vialUnit}</span>
         </div>
       </div>
       <div class="tl-cells">${cells}</div>
