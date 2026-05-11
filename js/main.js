@@ -18,10 +18,13 @@ window.addEventListener('unhandledrejection', e => {
   </div>`;
 });
 
-import { PHASES, COMPOUNDS, SP } from './data.js';
-import { S, pCost, rpM, initBudSel } from './state.js';
-import * as stateModule from './state.js';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js';
+// Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
+// export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
+// untuk hindari module duplication. Bump together saat deploy.
+import { PHASES, COMPOUNDS, SP } from './data.js?v=11';
+import { S, pCost, rpM, initBudSel } from './state.js?v=11';
+import * as stateModule from './state.js?v=11';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=11';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -33,14 +36,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js';
+} from './supabase.js?v=11';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js';
-import * as panelFns from './panels.js';
-import * as supaFns from './supabase.js';
+} from './panels.js?v=11';
+import * as panelFns from './panels.js?v=11';
+import * as supaFns from './supabase.js?v=11';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);

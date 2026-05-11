@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=11';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, pCost, totCost, totVials,
@@ -9,11 +9,11 @@ import {
   customDoses, inventoryCache, reconCache, getDose, isCustomDose,
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested
-} from './state.js';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js';
+} from './state.js?v=11';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=11';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js';
+import * as stateModule from './state.js?v=11';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
