@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=18';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=19';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -251,3 +251,65 @@ export function dmDealt(){
 export const _dmCheckedShim=()=>dmDealt();
 
 export let _dmAllNames=[];
+
+// ══════════════════════════════════════════════════════════
+// TIMELINE (Phase A — in-memory only, reset on refresh)
+// ══════════════════════════════════════════════════════════
+
+// Parse cycle text dari kolom on_cycle/off_cycle → {type, min, max}
+// type ∈ 'weeks' | 'continuous' | 'prn' | 'none' | 'goal' | 'bundle_ref' | 'taper' | 'custom' | 'unknown'
+export function parseCycleText(text){
+  if(!text) return {type:'unknown'};
+  const t = String(text).toLowerCase();
+  if(/continuous/.test(t)) return {type:'continuous'};
+  if(/^prn$/.test(t.trim())) return {type:'prn'};
+  if(/tidak ada off/.test(t)) return {type:'none'};
+  if(/sesuai target/.test(t)) return {type:'goal'};
+  if(/via .* cycle|ikuti jadwal|lihat masing/.test(t)) return {type:'bundle_ref'};
+  if(/taper/.test(t)) return {type:'taper'};
+  const m = String(text).match(/(\d+)(?:-(\d+))?\s*(minggu|hari|bulan)/i);
+  if(m){
+    const lo = parseInt(m[1]);
+    const hi = parseInt(m[2]||m[1]);
+    const u = m[3].toLowerCase();
+    const f = u==='minggu' ? 1 : u==='hari' ? 1/7 : 4.33;
+    return {type:'weeks', min:Math.max(1,Math.round(lo*f)), max:Math.max(1,Math.round(hi*f))};
+  }
+  return {type:'custom', raw:text};
+}
+
+// Parse weekly_total → {value, unit} atau {raw} kalau gak match angka
+export function parseWeeklyTotal(text){
+  if(!text) return null;
+  const m = String(text).match(/^([\d.]+)(?:-([\d.]+))?\s*(mg|mcg|IU|tablet)/i);
+  if(m) return {value:parseFloat(m[1]), valueMax:parseFloat(m[2]||m[1]), unit:m[3]};
+  return {raw:text};
+}
+
+// Timeline in-memory state (Phase A — gak persist ke DB)
+export const TL = {
+  cycleRuns: {}   // { compoundName: { startWeek: int } }
+};
+
+export function runCycleFor(name, startWeek){
+  TL.cycleRuns[name] = { startWeek: Math.max(1, Math.min(56, parseInt(startWeek)||1)) };
+}
+
+// Hitung status sel di Timeline grid (compound × week)
+// Return: 'on' | 'off' | 'inactive'
+export function tlCellStatus(week, compound){
+  if(!compound) return 'inactive';
+  const onP = parseCycleText(compound.on_cycle);
+  if(onP.type === 'continuous') return 'on';
+  if(onP.type === 'prn' || onP.type === 'goal' || onP.type === 'bundle_ref' || onP.type === 'unknown') return 'inactive';
+  const run = TL.cycleRuns[compound.name];
+  if(!run || onP.type !== 'weeks') return 'inactive';
+  const offP = parseCycleText(compound.off_cycle);
+  const onLen = onP.max;
+  const offLen = (offP.type === 'weeks') ? offP.max : (offP.type === 'none' ? 0 : 4);
+  const delta = week - run.startWeek;
+  if(delta < 0) return 'inactive';
+  if(offLen === 0) return 'on';
+  const cycleLen = onLen + offLen;
+  return (delta % cycleLen) < onLen ? 'on' : 'off';
+}

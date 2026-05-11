@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=18';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=19';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -9,12 +9,13 @@ import {
   customDoses, inventoryCache, reconCache, getDose, isCustomDose,
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
-  QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange
-} from './state.js?v=18';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=18';
+  QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
+  TL, parseCycleText, parseWeeklyTotal, tlCellStatus
+} from './state.js?v=19';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=19';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=18';
+import * as stateModule from './state.js?v=19';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -663,27 +664,101 @@ export function pVial(){
 // P3 — TIMELINE
 // ──────────────────────────────────────────
 export function pTimeline(){
-  // Schema v2 (v=18): doses_jsonb dropped dari compounds table. Timeline UI
-  // yang lama (gantt grid yang baca c.d[w]) sudah ga relevan — dose schedule
-  // akan input MANUAL via UI baru disini di session berikutnya.
-  //
-  // Roadmap rough untuk session berikutnya:
-  //   1. Bikin table baru `dose_schedule (user_id, compound_id, week, dose, unit)`
-  //   2. UI grid compound × week 56, inline edit per cell
-  //   3. Save trigger Budget/Vial recompute
-  //
-  // Sampai itu, panel ini placeholder. Decision Matrix, Compounds, Auth tetap jalan.
+  const weeks = Array.from({length:56}, (_,i)=>i+1);
+
+  // Y axis: union DM.selectedByQuarter across all 12 quarters
+  const yNames = new Set();
+  QUARTERS.forEach(qid => {
+    (DM.selectedByQuarter[qid] || new Set()).forEach(n => yNames.add(n));
+  });
+  const yCompounds = [...yNames]
+    .map(n => COMPOUNDS.find(c => c.name === n))
+    .filter(Boolean)
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  if(yCompounds.length === 0){
+    return `<div class="card">
+      <div class="card-title"><span class="ico">🗓</span> Timeline — Run Cycle Preview</div>
+      <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.7">
+        <div style="font-size:36px;margin-bottom:10px">📋</div>
+        <div>Pilih compound di <b>Decision Matrix</b> dulu — Y axis akan otomatis populated dari union semua quarter.</div>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(2)">Buka Decision Matrix →</button>
+      </div>
+    </div>`;
+  }
+
+  // Quarter bands header (groupkonsekutif weeks dgn same quarter)
+  const qSegs = [];
+  weeks.forEach(w => {
+    const qid = quarterFromWeek(w);
+    if(!qid) return;
+    const last = qSegs[qSegs.length-1];
+    if(last && last.qid === qid){ last.e = w; }
+    else { qSegs.push({qid, s:w, e:w}); }
+  });
+  const qBand = `<div class="tl-q-row">${qSegs.map(q =>
+    `<div class="tl-q-seg" style="flex:${q.e-q.s+1}">${quarterLabel(q.qid)}</div>`
+  ).join('')}</div>`;
+
+  // Week number row (label setiap kelipatan 4)
+  const wkRow = `<div class="tl-wk-row">${weeks.map(w =>
+    `<div class="tl-wk">${w%4===0?'W'+w:''}</div>`
+  ).join('')}</div>`;
+
+  // Y rows
+  const rows = yCompounds.map(c => {
+    const onP = parseCycleText(c.on_cycle);
+    const isContinuous = onP.type === 'continuous';
+    const isSpecial = ['prn','goal','bundle_ref','taper','custom','unknown'].includes(onP.type);
+    const run = TL.cycleRuns[c.name];
+    const startVal = run?.startWeek || 1;
+    const wt = parseWeeklyTotal(c.weekly_total);
+    const wtLabel = wt?.value ? `${wt.value}${wt.unit}/wk` : (c.weekly_total || '—');
+    const safeName = c.name.replace(/[^a-zA-Z0-9]/g,'_');
+    const escName = c.name.replace(/'/g,"\\'");
+
+    const cells = weeks.map(w => {
+      const status = tlCellStatus(w, c);
+      const catCls = CAT[c.cat]?.cls || '';
+      const cls = status==='on' ? `g-cell tl-on ${catCls}`
+                : status==='off' ? 'g-cell g-off tl-off'
+                : 'g-cell tl-inactive';
+      const tip = `${c.name} W${w}: ${status.toUpperCase()}${status==='on'?` · ${wtLabel}`:''}`;
+      return `<div class="${cls}" title="${tip}"></div>`;
+    }).join('');
+
+    const control = isContinuous
+      ? `<span class="tl-badge tl-cont-badge" title="Tidak ada OFF cycle">CONTINUOUS</span>`
+      : isSpecial
+      ? `<span class="tl-badge tl-special" title="${onP.raw||onP.type}">${onP.type.toUpperCase()}</span>`
+      : `<div class="tl-run">
+          <input type="number" min="1" max="56" value="${startVal}" id="tl-start-${safeName}" title="Start week (W1–W56)">
+          <button class="tl-run-btn" onclick="runCycle('${escName}')">▶ Run</button>
+        </div>`;
+
+    return `<div class="tl-row">
+      <div class="tl-lbl">
+        <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8px">${(c.cat||'off').toUpperCase()}</span>
+        <span class="tl-name" title="${c.name} · on=${c.on_cycle||'-'} · off=${c.off_cycle||'-'} · ${wtLabel}">${c.name}</span>
+        ${control}
+      </div>
+      <div class="tl-cells">${cells}</div>
+    </div>`;
+  }).join('');
+
   return `<div class="card">
-    <div class="card-title"><span class="ico">🗓</span> Timeline — Manual Dose Entry</div>
-    <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.7">
-      <div style="font-size:48px;margin-bottom:12px">🔧</div>
-      <div style="font-size:15px;font-weight:800;color:var(--t0);margin-bottom:6px">Refactor in progress</div>
-      <div style="max-width:480px;margin:0 auto 14px">
-        Schema sudah di-slim ke <b>14 kolom</b> (v2). Dose schedule per minggu sekarang akan di-input manual lewat UI baru yang sedang dibangun di tab ini.
-      </div>
-      <div style="font-size:11px;color:var(--t3);max-width:520px;margin:0 auto">
-        Sementara Decision Matrix tetap bisa pilih compound per quarter. Budget &amp; Vial Planner menunggu dose schedule sebelum bisa hitung biaya. Compound master library tetap editable di tab Compounds.
-      </div>
+    <div class="card-title"><span class="ico">🗓</span> Timeline — Run Cycle Preview · ${yCompounds.length} compounds</div>
+    <div class="tl-legend">
+      <span><span class="tl-sw tl-sw-on"></span> ON cycle</span>
+      <span><span class="tl-sw tl-sw-off"></span> OFF (washout)</span>
+      <span><span class="tl-sw tl-sw-cont"></span> Continuous</span>
+      <span><span class="tl-sw tl-sw-inactive"></span> Not started / N/A</span>
+    </div>
+    <div class="tl-wrap"><div class="tl-grid">${qBand}${wkRow}${rows}</div></div>
+    <div class="note" style="margin-top:8px;font-size:10px;color:var(--t3);line-height:1.5">
+      <b>Phase A MVP</b>: Pattern dari kolom <code>on_cycle</code>/<code>off_cycle</code> peptide. Klik <b>▶ Run</b> per row → cell ON/OFF auto-color.
+      Cycle "Run" disimpan in-memory only (reset saat refresh). Continuous compound auto-fill, PRN/Goal/Bundle gak punya pattern reguler.
+      Per-cell dose edit + vial calc → next session (Phase B).
     </div>
   </div>`;
 }

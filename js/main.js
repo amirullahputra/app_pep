@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=18';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=19';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=18';
-import * as stateModule from './state.js?v=18';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=18';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=19';
+import * as stateModule from './state.js?v=19';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=19';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=18';
+} from './supabase.js?v=19';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=18';
-import * as panelFns from './panels.js?v=18';
-import * as supaFns from './supabase.js?v=18';
+} from './panels.js?v=19';
+import * as panelFns from './panels.js?v=19';
+import * as supaFns from './supabase.js?v=19';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -276,6 +276,19 @@ function toggleCat(k){
 window.toggleBudSel = toggleBudSel;
 window.switchBudQuarter = switchBudQuarter;
 window.toggleCat = toggleCat;
+
+// ── TIMELINE — Run Cycle handler ──
+// Baca start-week input dari Timeline row, panggil runCycleFor di state,
+// trigger re-render supaya cell pattern muncul.
+window.runCycle = function(name){
+  const safe = name.replace(/[^a-zA-Z0-9]/g,'_');
+  const input = document.getElementById(`tl-start-${safe}`);
+  const startWeek = parseInt(input?.value) || 1;
+  if(typeof window.runCycleFor === 'function'){
+    window.runCycleFor(name, startWeek);
+  }
+  renderPanels();
+};
 
 // ── DOWNLOAD ──
 function dlPage(){
