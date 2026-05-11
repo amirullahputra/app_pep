@@ -215,9 +215,6 @@ document.getElementById('auth-modal')?.addEventListener('click',e=>{if(e.target=
 document.getElementById('dose-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeDoseModal();});
 document.getElementById('cmp-edit-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeCmpEdit();});
 
-// ── AUTH LISTENER ──
-try { setupAuthListener(); } catch(e){ console.error('setupAuthListener:',e); }
-
 // ── ERROR BANNER ──
 function showInitError(msg){
   const root = document.getElementById('panels-root');
@@ -229,15 +226,36 @@ function showInitError(msg){
   </div>`;
 }
 
+// ── DEBUG OVERLAY (selalu visible, no F12 needed) ──
+function updateDebugOverlay(extra){
+  const el = document.getElementById('app-debug');
+  if(!el) return;
+  const lines = [
+    `PHASES=${PHASES?.length||0}`,
+    `COMPOUNDS=${COMPOUNDS?.length||0}`,
+    `tab=${S?.tab}`,
+    `user=${S?.user?'yes':'no'}`,
+  ];
+  if(extra) lines.push(extra);
+  el.textContent = lines.join(' · ');
+}
+window.updateDebugOverlay = updateDebugOverlay;
+
 // ── INIT ──
 (async () => {
   const errs = [];
-  try { await loadAllPepData(); } catch(e){ errs.push('loadAllPepData: '+(e.message||e)); }
+  updateDebugOverlay('init...');
+  try { await loadAllPepData(); updateDebugOverlay('pepData ok'); } catch(e){ errs.push('loadAllPepData: '+(e.message||e)); updateDebugOverlay('pepData FAIL'); }
   try { window._quarters = await loadQuartersFromDB(); } catch(e){ errs.push('loadQuarters: '+(e.message||e)); window._quarters=[]; }
+
+  // Setup auth listener AFTER data loaded — prevents race where onAuthStateChange
+  // fires during/before loadAllPepData and renderPanels is called with empty PHASES
+  try { setupAuthListener(); } catch(e){ errs.push('setupAuthListener: '+(e.message||e)); }
+
   setInterval(renderTimer,1000);
   renderTimer();
-  renderPhaseRow();
-  renderNav();
-  renderPanels();
+  try { renderPhaseRow(); } catch(e){ errs.push('renderPhaseRow: '+(e.message||e)); }
+  try { renderNav(); } catch(e){ errs.push('renderNav: '+(e.message||e)); }
+  try { renderPanels(); updateDebugOverlay('rendered'); } catch(e){ errs.push('renderPanels: '+(e.message||e)); updateDebugOverlay('render FAIL: '+(e.message||e)); }
   if(errs.length) showInitError(errs.join('\n'));
 })();
