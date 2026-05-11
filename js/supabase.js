@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=23';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus } from './state.js?v=23';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=24';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus } from './state.js?v=24';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -38,7 +38,8 @@ const COMPOUND_COLS = [
   'id','created_at','name','category','mechanism','risk_text','hiv_notes',
   'notes','vial_unit','shelf_life_days','vial_size','vial_price_idr',
   'vial_label','timing_note',
-  'on_cycle','off_cycle','weekly_total'
+  'on_cycle','off_cycle','weekly_total',
+  'efficiency_score'
 ].join(',');
 
 const EMPTY_COST = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };
@@ -81,6 +82,7 @@ export async function loadAllPepData(){
       name:r.name, cat:r.category||'off',
       hiv_notes:r.hiv_notes, notes:r.notes,
       on_cycle:r.on_cycle, off_cycle:r.off_cycle, weekly_total:r.weekly_total,
+      efficiency_score: r.efficiency_score || 0,
       d: {},               // doses_jsonb dropped — Timeline tab will input manual nanti
       c: EMPTY_COST,       // costs always zero until dose schedule available
     });

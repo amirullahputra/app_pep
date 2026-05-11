@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=23';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=24';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,12 +10,13 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
-  parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle
-} from './state.js?v=23';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=23';
+  parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
+  tlGetCycleEffective, tlCostForQuarter
+} from './state.js?v=24';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=24';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=23';
+import * as stateModule from './state.js?v=24';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -42,11 +43,18 @@ export function pOverview(){
   const dealt = dmDealt();   // Set compound names di quarter aktif
   const dealtFilter = dealt.size > 0 ? (c => dealt.has(c.name)) : (()=>true);
 
-  const activeThisWeek = COMPOUNDS.filter(c => {
-    const dose = getDose(c.name, cw);
-    return dose != null && dose > 0 && dealtFilter(c);
-  }).map(c => ({...c, dose:getDose(c.name,cw), unit:VSPECS[c.name]?.unit||'mg', prio:getPrio(c.name,qid)}))
-    .sort((a,b) => b.prio-a.prio);
+  // Compound aktif minggu ini = di-DM + status ON di cycle week ini
+  // (pakai tlCellStatus + tlDoseForWeek, bukan c.d[w] yang udah di-drop)
+  const activeThisWeek = COMPOUNDS
+    .filter(c => dealt.has(c.name))
+    .filter(c => tlCellStatus(cw, c, qid) === 'on')
+    .map(c => ({
+      ...c,
+      dose: tlDoseForWeek(cw, c, qid),
+      unit: VSPECS[c.name]?.unit || 'mg',
+      eff: c.efficiency_score || 0
+    }))
+    .sort((a,b) => b.eff - a.eff);
 
   // Week card — dose minggu ini
   const weekCard = `
@@ -72,21 +80,20 @@ export function pOverview(){
     ${activeThisWeek.length === 0
       ? '<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Tidak ada compound aktif minggu ini</div>'
       : activeThisWeek.map(c => {
-          const st = stLabel(c.prio);
           const isCustom = isCustomDose(c.name, cw);
           return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">
             <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
             <div style="flex:1;font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}${isCustom?'<span style="color:var(--hor);font-size:9px;margin-left:3px">✎</span>':''}</div>
             <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t0);flex-shrink:0;width:60px;text-align:right">${c.dose}${c.unit}</div>
-            <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
+            <span style="font-size:9px;font-weight:800;flex-shrink:0;width:58px;text-align:center;padding:2px 4px;border-radius:3px;background:${scCol(c.eff)};color:#fff">EFF ${c.eff}</span>
           </div>`;
         }).join('')
     }`;
 
-  // Biaya per kategori (quarter aktif, dari DM-selected only)
+  // Biaya per kategori (quarter aktif, dari DM-selected, pakai tlCostForQuarter)
   const cc = {}; Object.keys(CAT).forEach(k => cc[k] = 0);
-  COMPOUNDS.filter(dealtFilter).forEach(c => {
-    cc[c.cat] += costForQuarter(c.name, qid).cost;
+  COMPOUNDS.filter(c => dealt.has(c.name)).forEach(c => {
+    cc[c.cat] += tlCostForQuarter(c, qid).cost;
   });
   const mxcc = Math.max(...Object.values(cc), 1);
   const catBars = Object.entries(cc).filter(([,v]) => v > 0).map(([k,v]) => `
@@ -98,17 +105,17 @@ export function pOverview(){
       <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);flex-shrink:0;min-width:68px;text-align:right">${rpM(v)}</div>
     </div>`).join('') || '<div style="color:var(--t3);font-size:11px;padding:10px 0">Belum ada compound dipilih di Decision Matrix untuk quarter ini</div>';
 
-  // Compound list aktif di quarter (sorted by prio)
+  // Compound list aktif di quarter (sorted by efficiency_score)
   const quarterActive = [...COMPOUNDS]
-    .filter(dealtFilter)
-    .map(c => ({ ...c, prio: getPrio(c.name, qid) }))
-    .sort((a,b) => b.prio - a.prio);
-  const maxPrio = quarterActive[0]?.prio || 100;
+    .filter(c => dealt.has(c.name))
+    .map(c => ({ ...c, eff: c.efficiency_score || 0 }))
+    .sort((a,b) => b.eff - a.eff);
+  const maxEff = Math.max(...quarterActive.map(c => c.eff), 1);
 
-  // Recap vial untuk quarter
+  // Recap vial untuk quarter (pakai tlCostForQuarter — handle dose dari Timeline cycle)
   const vialRecap = quarterActive.map(c => {
-    const r = costForQuarter(c.name, qid);
-    return { name: c.name, cat: c.cat, vials: r.vials, cost: r.cost };
+    const r = tlCostForQuarter(c, qid);
+    return { name: c.name, cat: c.cat, vials: r.vials, cost: r.cost, totalDose: r.totalDose, unit: r.unit };
   }).filter(r => r.vials > 0).sort((a,b) => b.vials - a.vials);
   const maxV = Math.max(1, ...vialRecap.map(r => r.vials));
   const totalV = vialRecap.reduce((a,r) => a + r.vials, 0);
@@ -129,18 +136,18 @@ export function pOverview(){
     <div class="card">
       <div class="card-title"><span class="ico">🏆</span> Compound Selected — ${qLabel} (${quarterActive.length} aktif)</div>
       ${quarterActive.length === 0
-        ? '<div style="color:var(--t3);font-size:11px;padding:14px 0;text-align:center">Belum ada compound dipilih untuk quarter ini. <button onclick="setTab(2)" style="background:var(--acc);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-weight:700;cursor:pointer;margin-left:8px">Buka Decision Matrix →</button></div>'
-        : quarterActive.map((c,i) => { const st = stLabel(c.prio); return `
+        ? '<div style="color:var(--t3);font-size:11px;padding:14px 0;text-align:center">Belum ada compound dipilih untuk quarter ini. <button onclick="setTab(1)" style="background:var(--acc);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-weight:700;cursor:pointer;margin-left:8px">Buka Decision Matrix →</button></div>'
+        : quarterActive.map((c,i) => `
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
             <div style="font-size:9px;color:var(--t3);width:14px;flex-shrink:0;text-align:right">${i+1}</div>
             <span class="lb ${CAT[c.cat].cls}" style="font-size:8px;flex-shrink:0;width:62px;text-align:center">${CAT[c.cat].n}</span>
-            <div style="font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;width:110px">${c.name}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;width:130px">${c.name}</div>
             <div style="flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden">
-              <div style="width:${Math.round(c.prio/maxPrio*100)}%;height:100%;background:${scCol(c.prio)};border-radius:3px"></div>
+              <div style="width:${Math.round(c.eff/maxEff*100)}%;height:100%;background:${scCol(c.eff)};border-radius:3px"></div>
             </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${scCol(c.prio)};flex-shrink:0;width:26px;text-align:right">${c.prio}</div>
-            <span class="status-pill ${st.cls}" style="font-size:8px;flex-shrink:0;width:58px;text-align:center">${st.l}</span>
-          </div>`; }).join('')
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:${scCol(c.eff)};flex-shrink:0;width:32px;text-align:right">${c.eff}</div>
+            <span style="font-size:8px;font-weight:700;color:var(--t3);flex-shrink:0">EFF</span>
+          </div>`).join('')
       }
     </div>
     <div class="card">
@@ -692,7 +699,7 @@ export function pTimeline(){
       <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.7">
         <div style="font-size:36px;margin-bottom:10px">📋</div>
         <div>Belum ada compound dipilih untuk <b>${qLabel}</b> di Decision Matrix.</div>
-        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(2)">Buka Decision Matrix →</button>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(1)">Buka Decision Matrix →</button>
       </div>
     </div>`;
   }
@@ -777,133 +784,89 @@ export function pTimeline(){
 // P4 — BUDGET + CONFLICT
 // ──────────────────────────────────────────
 export function pBudget(){
-  const qid = S.budQuarter || S.quarter;
-  const cap = S.budCap;
+  // Pakai S.quarter global (quarter row card di atas) — TIDAK ada quarter chip lagi
+  const qid = S.quarter;
   const qLabel = quarterLabel(qid);
-
-  // Schema v2: dose schedule (doses_jsonb) dropped — cost calc always 0.
-  // Show banner pointing user ke Timeline tab (manual dose entry — next session).
-  const doseBanner = `<div class="conflict-banner cb-warn" style="margin-bottom:14px">
-    <div class="cb-ico">⏳</div>
-    <div>
-      <div class="cb-title">Dosis per minggu belum di-input</div>
-      <div style="font-size:11px;color:var(--t1)">Schema sudah di-slim ke v2. Dose schedule akan di-input manual via tab <b>Timeline</b> (UI sedang di-build). Sampai itu, semua angka biaya di sini akan menunjukkan <b>—</b>.</div>
-    </div>
-  </div>`;
-
-  // Filter by Decision Matrix selection untuk quarter ini.
   const dmSelected = DM.selectedByQuarter[qid] || new Set();
 
-  // Empty state: DM Quarter X belum punya selection
+  // Empty state: DM untuk quarter ini belum di-isi
   if(dmSelected.size === 0){
     return `
     <div class="card">
       <div class="card-title"><span class="ico">💰</span> Budget + Conflict — ${qLabel}</div>
-      <div class="ph-toggle-row" style="margin-bottom:16px;flex-wrap:wrap;gap:4px">
-        <span style="font-size:10px;color:var(--t2);font-weight:700">Quarter:</span>
-        ${QUARTERS.map(q=>`<button class="ph-tgl${qid===q?' tacc':''}" onclick="switchBudQuarter('${q}')">${quarterLabel(q)}</button>`).join('')}
-      </div>
       <div style="padding:2rem;text-align:center;color:var(--t3);font-size:13px;line-height:1.6">
         <div style="font-size:32px;margin-bottom:8px">🎯</div>
         <div>Belum ada compound dipilih untuk <b>${qLabel}</b> di Decision Matrix.</div>
         <div style="margin-top:8px;font-size:11px">Pilih compound di Decision Matrix dulu, baru bisa hitung budget.</div>
-        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(2)">Buka Decision Matrix →</button>
+        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setTab(1)">Buka Decision Matrix →</button>
       </div>
     </div>`;
   }
 
-  const sorted=[...COMPOUNDS]
-    .filter(c=>dmSelected.has(c.name))
-    .map(c=>{
-      const ci = costForQuarter(c.name, qid);
-      return { ...c, prio: getPrio(c.name, qid), cost: ci.cost, eff: budEff(c.name, qid), ss: sportScore(c.name) };
+  // Compound list dari DM — read-only, sorted by efficiency_score DESC
+  const sorted = [...COMPOUNDS]
+    .filter(c => dmSelected.has(c.name))
+    .map(c => {
+      const r = tlCostForQuarter(c, qid);
+      return {
+        ...c,
+        eff: c.efficiency_score || 0,
+        cost: r.cost,
+        vials: r.vials,
+        totalDose: r.totalDose,
+        unit: r.unit
+      };
     })
-    .sort((a,b)=>b.prio-a.prio);
+    .sort((a,b) => b.eff - a.eff);
 
-  // Auto-prune S.budSel ke subset dari DM-selected (hapus phantom dari fase lain)
-  const visibleNames = new Set(sorted.map(c=>c.name));
-  [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
-  // Kalau S.budSel kosong setelah prune, auto-fill semua DM-selected (default: all checked)
-  if(S.budSel.size === 0){
-    sorted.forEach(c => S.budSel.add(c.name));
-  }
+  const totalCost = sorted.reduce((a,c) => a + c.cost, 0);
+  const totalVials = sorted.reduce((a,c) => a + c.vials, 0);
 
-  const selCost=sorted.filter(c=>S.budSel.has(c.name)).reduce((a,c)=>a+c.cost,0);
-  const selCount=sorted.filter(c=>S.budSel.has(c.name)).length;
-  const selPct=Math.min(100,Math.round(selCost/cap*100));
-  const over=selCost>cap;
-  let sugCost=0,suggested=[];
-  sorted.forEach(c=>{if(sugCost+c.cost<=cap){sugCost+=c.cost;suggested.push(c.name);}});
+  // Conflict detection (now reads from DM via getConflicts updated)
+  const conflicts = getConflicts();
+  const actConf = conflicts.filter(r => r.triggered);
 
-  const conflicts=getConflicts(),actConf=conflicts.filter(r=>r.triggered);
+  const cBanner = actConf.length > 0
+    ? `<div class="conflict-banner cb-warn"><div class="cb-ico">⚠️</div><div><div class="cb-title">${actConf.length} KONFLIK AKTIF dari DM selection!</div><div class="cb-list">${actConf.map(r=>`• ${r.lvl} — ${r.title}`).join('<br>')}</div><div style="font-size:10px;color:var(--t2);margin-top:4px">Scroll ke Live Monitor →</div></div></div>`
+    : `<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">${dmSelected.size} compound dari DM aman dari conflict rules.</div></div></div>`;
 
-  const cBanner=actConf.length>0
-    ?`<div class="conflict-banner cb-warn"><div class="cb-ico">⚠️</div><div><div class="cb-title">${actConf.length} KONFLIK AKTIF dalam seleksi lo!</div><div class="cb-list">${actConf.map(r=>`• ${r.lvl} — ${r.title}`).join('<br>')}</div><div style="font-size:10px;color:var(--t2);margin-top:4px">Scroll ke Live Monitor →</div></div></div>`
-    :`<div class="conflict-banner cb-ok"><div class="cb-ico">✅</div><div><div class="cb-title">Tidak ada konflik terdeteksi</div><div style="font-size:11px;color:var(--t1)">Seleksi ${selCount} compounds saat ini aman dari conflict rules.</div></div></div>`;
-
-  const cmpRows=sorted.map(c=>{
-    const sel=S.budSel.has(c.name),conf=actConf.some(r=>r.active.includes(c.name));
-    return`<div class="bopt-row${conf?' in-conflict':''}">
-      <div class="chk${sel?' on':''}" onclick="toggleBudSel('${c.name}')"></div>
+  const cmpRows = sorted.map(c => {
+    const conf = actConf.some(r => r.active.includes(c.name));
+    return `<div class="bopt-row${conf?' in-conflict':''}" style="cursor:default">
       <div class="bopt-info">
         <div class="bopt-name" style="${conf?'color:var(--warn)':''}">${c.name}${conf?' ⚠':''}</div>
         <div class="bopt-sub">
-          <span class="lb ${CAT[c.cat].cls}" style="font-size:8.5px">${CAT[c.cat].n}</span>
-          <span>Prio <strong>${c.prio}</strong></span>
-          <span>★${c.ss}</span>
-          <span>Eff <strong style="color:${c.eff>=10?'var(--f3)':c.eff>=5?'var(--f2)':'var(--t3)'}">${c.eff>0?c.eff+'x':'—'}</strong></span>
+          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8.5px">${CAT[c.cat]?.n||c.cat}</span>
+          <span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:3px;background:${scCol(c.eff)};color:#fff">EFF ${c.eff}</span>
+          <span style="color:var(--t2)">${c.vials} vial · ${Math.round(c.totalDose*10)/10}${c.unit}</span>
         </div>
       </div>
-      <div class="bopt-cost">${rpM(c.cost)}</div>
+      <div class="bopt-cost">${c.cost>0 ? rpM(c.cost) : '—'}</div>
     </div>`;
   }).join('');
 
-  const redAlerts=conflicts.map(r=>{
-    const cls=r.triggered?`la-${r.lvl.toLowerCase()}`:'la-ok';
-    return`<div class="live-alert ${cls}">
+  const redAlerts = conflicts.map(r => {
+    const cls = r.triggered ? `la-${r.lvl.toLowerCase()}` : 'la-ok';
+    return `<div class="live-alert ${cls}">
       <div class="la-title">${r.triggered?'⚠':'✓'} ${r.lvl} — ${r.title}</div>
       ${r.triggered?`<div class="la-body">${r.body}</div><div class="la-rec">→ ${r.rec}</div>`:''}
       <div class="la-cmps">${r.cmps.map(c=>`<span class="la-cmp${r.active.includes(c)?' hit':''}">${c}</span>`).join('')}</div>
     </div>`;
   }).join('');
 
-  const effRanking=[...sorted].sort((a,b)=>b.eff-a.eff).slice(0,8);
-  // update _lastSuggested via module
-  stateModule._lastSuggested.length=0;
-  suggested.forEach(n=>stateModule._lastSuggested.push(n));
-
-  return`
-  ${doseBanner}
-  <div class="bud-controls">
-    <div class="bud-val-row"><div class="bud-val" id="budDisp">${rpM(cap)}</div><div class="bud-lbl">budget cap</div></div>
-    <input type="range" min="5000000" max="200000000" step="5000000" value="${cap}"
-      oninput="S.budCap=+this.value;document.getElementById('budDisp').textContent='Rp '+Math.round(+this.value).toLocaleString('id-ID');saveBudgetToDB();renderPanels()">
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px">
-      <span>Rp 5 jt</span><span>Rp 200 jt</span>
-    </div>
-    <div class="ph-toggle-row" style="flex-wrap:wrap;gap:4px">
-      <span style="font-size:10px;color:var(--t2);font-weight:700">Quarter:</span>
-      ${QUARTERS.map(q=>`<button class="ph-tgl${qid===q?' tacc':''}" onclick="switchBudQuarter('${q}')">${quarterLabel(q)}</button>`).join('')}
-      <button class="auto-btn" onclick="autoPickBudget()">✨ Auto Pilih Optimal</button>
-    </div>
-  </div>
-
-  <div class="bud-progress">
-    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:12px;font-weight:700;color:var(--t1)">Dipilih: <span style="color:var(--acc)">${rpM(selCost)}</span> · ${selCount} compounds</span>
-      <span style="font-size:12px;font-weight:700;color:var(--t1)">Sisa: <span style="color:${over?'var(--warn)':'var(--f3)'}">${over?'OVER BUDGET':rpM(cap-selCost)}</span></span>
-    </div>
-    <div class="bud-prog-bar"><div class="bud-prog-fill" style="width:${selPct}%;background:${over?'var(--warn)':'var(--acc)'}"></div></div>
-    <div style="font-size:10px;color:var(--t2);margin-top:3px">${selPct}% dari cap · ${qLabel}</div>
-  </div>
-
+  return `
   ${cBanner}
 
-  <div class="grid2">
+  <div class="grid2" style="margin-top:14px">
     <div class="card">
-      <div class="card-title"><span class="ico">💰</span> Pilih Compound — ${qLabel}</div>
+      <div class="card-title">
+        <span class="ico">💰</span> Budget — ${qLabel}
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">
+          Total: <span style="color:var(--acc);font-family:'JetBrains Mono',monospace">${rpM(totalCost)}</span> · ${totalVials} vial
+        </span>
+      </div>
       ${cmpRows}
-      <div class="note">Centang untuk include. Conflict langsung terdeteksi real-time. Auto Pilih = greedy by Priority Score sampai budget habis.</div>
+      <div class="note">List dari Decision Matrix · sorted by Efficiency Score · read-only (edit selection di DM tab).</div>
     </div>
     <div>
       <div class="card" style="margin-bottom:10px">
@@ -912,15 +875,6 @@ export function pBudget(){
           Live Conflict Monitor — ${actConf.length}/${REDUNDANCY.length} aktif
         </div>
         ${redAlerts}
-      </div>
-      <div class="card">
-        <div class="card-title"><span class="ico">⚡</span> Top Budget Efficiency — ${qLabel}</div>
-        ${effRanking.map(c=>{const sel=S.budSel.has(c.name);return`<div class="srow" style="${sel?'':'opacity:.4'}">
-          <div class="srow-lbl">${c.name}</div>
-          <div class="srow-bar"><div class="srow-fill" style="width:${Math.min(100,c.eff*5)}%;background:${c.eff>=10?'var(--f3)':c.eff>=5?'var(--f2)':'var(--f1)'}"><span class="srow-txt">${c.eff}x</span></div></div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--acc)">${rpM(c.cost)}</div>
-        </div>`;}).join('')}
-        <div class="note">Efisiensi = Priority Score ÷ Biaya (juta Rp). Dim = belum dipilih.</div>
       </div>
     </div>
   </div>`;

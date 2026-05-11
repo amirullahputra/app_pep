@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=23';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=24';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=23';
-import * as stateModule from './state.js?v=23';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=23';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost } from './state.js?v=24';
+import * as stateModule from './state.js?v=24';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=24';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,22 +37,22 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=23';
+} from './supabase.js?v=24';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=23';
-import * as panelFns from './panels.js?v=23';
-import * as supaFns from './supabase.js?v=23';
+} from './panels.js?v=24';
+import * as panelFns from './panels.js?v=24';
+import * as supaFns from './supabase.js?v=24';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
 
 // ── RENDER PANELS ──
-// New tab order: Overview → Timeline → Decision → Vial → Budget → Compounds
+// Tab order: Overview → Decision Matrix → Timeline → Vial → Budget → Compounds
 function renderPanels(){
-  const fns=[pOverview,pTimeline,pDecision,pVial,pBudget,pCompounds];
+  const fns=[pOverview,pDecision,pTimeline,pVial,pBudget,pCompounds];
   document.getElementById('panels-root').innerHTML=`<div class="panel act">${fns[S.tab]()}</div>`;
 }
 window.renderPanels = renderPanels;
@@ -134,8 +134,8 @@ window.renderQuarterRow = renderQuarterRow;
 // ── NAV ──
 const TABS=[
   {ico:'📊',l:'Overview'},
-  {ico:'🗓',l:'Timeline'},
   {ico:'🎯',l:'Decision Matrix'},
+  {ico:'🗓',l:'Timeline'},
   {ico:'📦',l:'Vial Planner'},
   {ico:'💰',l:'Budget + Conflict'},
   {ico:'🧬',l:'Compounds'},

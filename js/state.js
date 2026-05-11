@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=23';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=24';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -149,7 +149,14 @@ export function sportScore(name){
   return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
 }
 export function getConflicts(){
-  return REDUNDANCY.map(r=>({...r,active:r.cmps.filter(c=>S.budSel.has(c)),triggered:r.cmps.filter(c=>S.budSel.has(c)).length>=r.thresh}));
+  // Pakai DM.selectedByQuarter[S.quarter] sebagai sumber (bukan S.budSel)
+  // — BC tab read-only, konflik ngikut keputusan di DM
+  const dmSel = DM.selectedByQuarter[S.quarter || QUARTERS[0]] || new Set();
+  return REDUNDANCY.map(r=>({
+    ...r,
+    active: r.cmps.filter(c => dmSel.has(c)),
+    triggered: r.cmps.filter(c => dmSel.has(c)).length >= r.thresh
+  }));
 }
 
 // ── CUSTOM DOSES ──
@@ -350,6 +357,51 @@ export function tlDoseForWeek(week, compound, qid){
   if(status !== 'on') return 0;
   const wt = parseWeeklyTotal(compound.weekly_total);
   return wt?.value || 0;
+}
+
+// Effective cycle: kalau user belum set via Timeline UI, fallback ke master CSV defaults.
+// Dipakai oleh Overview (cost/vial summary) supaya gak nunggu user buka Timeline dulu.
+export function tlGetCycleEffective(qid, name){
+  const set = TL.cycles[`${qid}|${name}`];
+  if(set && (set.on > 0 || set.off > 0)) return set;
+  const c = COMPOUNDS.find(x => x.name === name);
+  if(!c) return {on:0, off:0};
+  const onP = parseCycleText(c.on_cycle);
+  const offP = parseCycleText(c.off_cycle);
+  const qWeeks = weeksInQuarter(qid).length || 13;
+  const on = onP.type === 'weeks' ? Math.min(onP.max, qWeeks)
+           : onP.type === 'continuous' ? qWeeks
+           : 0;
+  const off = offP.type === 'weeks' ? offP.max : 0;
+  return {on, off};
+}
+
+// Cost untuk compound di quarter — pakai effective cycle + weekly_total + vial_price.
+// Replaces buggy costForQuarter() yang ngandelin c.d[w] (dropped).
+export function tlCostForQuarter(compound, qid){
+  if(!compound || !qid) return {totalDose:0, vials:0, cost:0, unit:'mg'};
+  const weeks = weeksInQuarter(qid);
+  if(weeks.length === 0) return {totalDose:0, vials:0, cost:0, unit:'mg'};
+  const cycle = tlGetCycleEffective(qid, compound.name);
+  const wt = parseWeeklyTotal(compound.weekly_total);
+  const perWeekDose = wt?.value || 0;
+  let totalDose = 0;
+  weeks.forEach((w, i) => {
+    const custom = customDoses[compound.name]?.[w];
+    if(custom !== undefined){ totalDose += custom; return; }
+    if(cycle.on === 0) return;
+    let isOn = false;
+    if(cycle.off === 0) isOn = i < cycle.on;
+    else isOn = (i % (cycle.on + cycle.off)) < cycle.on;
+    if(isOn) totalDose += perWeekDose;
+  });
+  const vs = VSPECS[compound.name];
+  const vSize = vs?.vSize || 1;
+  const unit = vs?.unit || 'mg';
+  const vPrice = vs?.vPrice || 0;
+  const vials = (totalDose > 0 && vSize > 0) ? Math.ceil(totalDose / vSize) : 0;
+  const cost = vials * vPrice;
+  return {totalDose, vials, cost, unit};
 }
 
 // Vial summary per compound — total dose + vial needs (scoped to quarter weeks)
