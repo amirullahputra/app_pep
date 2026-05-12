@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=45';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=46';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=45';
-import * as stateModule from './state.js?v=45';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=45';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=46';
+import * as stateModule from './state.js?v=46';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=46';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=45';
+} from './supabase.js?v=46';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=45';
-import * as panelFns from './panels.js?v=45';
-import * as supaFns from './supabase.js?v=45';
+} from './panels.js?v=46';
+import * as panelFns from './panels.js?v=46';
+import * as supaFns from './supabase.js?v=46';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -131,9 +131,11 @@ function renderQuarterRow(){
     </div>`;
   }).join('');
 
-  // Layout: Grand Total (1.4fr) + 4 quarter cards (1fr each) di 1 baris
-  document.getElementById('phase-row').innerHTML =
-    `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px">${allCard}${quarterCards}</div>`;
+  // Layout: Grand Total (1.4fr) + 4 quarter cards (1fr each) di 1 baris.
+  // Override CSS .phase-row repeat(4,1fr) via inline style supaya 5-col jalan.
+  const row = document.getElementById('phase-row');
+  row.style.gridTemplateColumns = '1.4fr 1fr 1fr 1fr 1fr';
+  row.innerHTML = allCard + quarterCards;
 }
 window.renderQuarterRow = renderQuarterRow;
 
