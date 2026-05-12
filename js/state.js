@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=55';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=56';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -86,6 +86,7 @@ export let S={
   budCap: 50000000,
   budQuarter: defaultQuarter(),  // budget tab independent quarter selector
   budSel: new Set(),
+  budSelByQuarter: {},  // {qid: Set<compoundName>} — semua quarter dari DB (final deal)
   vialPOV: 'all',
   vialSort: 'cost',
   vialTab: 'stok',

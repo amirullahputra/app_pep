@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=55';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=56';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=55';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=55';
+} from './state.js?v=56';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=56';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=55';
+import * as stateModule from './state.js?v=56';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -26,9 +26,16 @@ export function pOverview(){
   const allMode = S.viewAll === true;
   const qid = S.quarter || QUARTERS[0];
   const qLabel = allMode ? 'All Quarters' : quarterLabel(qid);
-  // Scope quarters: when allMode → all DM-active quarters. Else just current.
+  // Source of truth: Budget Filter checkboxes (S.budSelByQuarter) = final deal.
+  // Fallback ke DM (hope/plan) untuk quarter yang user belum buka Budget tab.
+  const selFor = (q) => {
+    const bs = S.budSelByQuarter?.[q];
+    if(bs && bs.size > 0) return bs;
+    return DM.selectedByQuarter[q] || new Set();
+  };
+  // Scope quarters: when allMode → all active quarters (budget OR DM). Else just current.
   const scopeQuarters = allMode
-    ? QUARTERS.filter(q => (DM.selectedByQuarter[q]?.size || 0) > 0)
+    ? QUARTERS.filter(q => selFor(q).size > 0)
     : [qid];
 
   // Tanggal aktual dari W1 = 6 Juli 2026
@@ -45,17 +52,17 @@ export function pOverview(){
   const cwStart = weekToDate(cw);
   const cwEnd = new Date(cwStart); cwEnd.setDate(cwEnd.getDate()+6);
 
-  // dealt = union compound names across scope quarters
+  // dealt = union compound names across scope quarters (budget-checked or DM fallback)
   const dealt = new Set();
-  scopeQuarters.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealt.add(n)));
+  scopeQuarters.forEach(q => selFor(q).forEach(n => dealt.add(n)));
   const dealtFilter = dealt.size > 0 ? (c => dealt.has(c.name)) : (()=>true);
 
   // Compound aktif minggu ini = di-DM (untuk quarter dari week ini) + ON cycle
   // Note: di allMode, week ini cuma di 1 quarter. Cek compound DM untuk quarter itu.
   const cwQuarterAct = quarterFromWeek(cw) || qid;
-  const dmAtCwQuarter = DM.selectedByQuarter[cwQuarterAct] || new Set();
+  const selAtCwQuarter = selFor(cwQuarterAct);
   const activeThisWeek = COMPOUNDS
-    .filter(c => dmAtCwQuarter.has(c.name))
+    .filter(c => selAtCwQuarter.has(c.name))
     .filter(c => tlCellStatus(cw, c, cwQuarterAct) === 'on')
     .map(c => ({
       ...c,
@@ -99,10 +106,11 @@ export function pOverview(){
         }).join('')
     }`;
 
-  // Biaya per kategori — sum across scopeQuarters
+  // Biaya per kategori — sum across scopeQuarters (budget-checked)
   const cc = {}; Object.keys(CAT).forEach(k => cc[k] = 0);
   scopeQuarters.forEach(q => {
-    COMPOUNDS.filter(c => DM.selectedByQuarter[q]?.has(c.name)).forEach(c => {
+    const sel = selFor(q);
+    COMPOUNDS.filter(c => sel.has(c.name)).forEach(c => {
       cc[c.cat] += tlCostForQuarter(c, q).cost;
     });
   });
@@ -123,11 +131,11 @@ export function pOverview(){
     .sort((a,b) => b.eff - a.eff);
   const maxEff = Math.max(...quarterActive.map(c => c.eff), 1);
 
-  // Recap vial — sum across scopeQuarters per compound
+  // Recap vial — sum across scopeQuarters per compound (budget-checked)
   const vialRecap = quarterActive.map(c => {
     let vials = 0, cost = 0, totalDose = 0;
     scopeQuarters.forEach(q => {
-      if(DM.selectedByQuarter[q]?.has(c.name)){
+      if(selFor(q).has(c.name)){
         const r = tlCostForQuarter(c, q);
         vials += r.vials; cost += r.cost; totalDose += r.totalDose;
       }

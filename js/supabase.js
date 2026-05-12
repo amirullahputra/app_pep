@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=55';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=55';
-import { compoundFromDB } from './models.js?v=55';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=56';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=56';
+import { compoundFromDB } from './models.js?v=56';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -234,6 +234,19 @@ export async function loadBudgetFromDB(qid){
   }else{
     initBudSel(qid);
   }
+  S.budSelByQuarter[qid] = new Set(S.budSel);
+}
+
+// Load semua budget selection user across all quarters → S.budSelByQuarter
+// Source of truth untuk Overview "final deal" (vs DM = hope).
+export async function loadAllBudgetSelections(){
+  S.budSelByQuarter = {};
+  if(!S.user) return;
+  const data = await authFetch('budget_selections',
+    `select=quarter_id,selected_compounds&user_id=eq.${S.user.id}`);
+  (data||[]).forEach(r => {
+    S.budSelByQuarter[r.quarter_id] = new Set(r.selected_compounds||[]);
+  });
 }
 
 export async function saveBudgetToDB(){
@@ -247,6 +260,7 @@ export async function saveBudgetToDB(){
       updated_at: new Date().toISOString()
     })
   });
+  S.budSelByQuarter[S.budQuarter] = new Set(S.budSel);
   showSaveInd();
 }
 
@@ -698,6 +712,7 @@ export function setupAuthListener(){
     // Salah satu hang gak block yang lain — render lagi setelah semua selesai/timeout.
     await Promise.allSettled([
       withTimeout(loadBudgetFromDB(S.budQuarter), 8000, 'budget'),
+      withTimeout(loadAllBudgetSelections(), 8000, 'budgetAll'),
       withTimeout(loadCustomDoses(), 8000, 'customDoses'),
       withTimeout(loadInventory(), 8000, 'inventory'),
       withTimeout(loadReconVials(), 8000, 'reconVials'),
