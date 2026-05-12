@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=56';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=57';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=56';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=56';
+} from './state.js?v=57';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=57';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=56';
+import * as stateModule from './state.js?v=57';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -918,8 +918,11 @@ export function pTimeline(){
   return `<div class="card">
     <div class="card-title">
       <span class="ico">🗓</span> Timeline — ${qLabel} · ${yCompounds.length} compounds · ${weeks.length} weeks
-      <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">
-        Total vial: <span style="color:var(--acc)">${grandTotalVials}</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;color:var(--t2)">
+          Total vial: <span style="color:var(--acc)">${grandTotalVials}</span>
+        </span>
+        <button onclick="saveTLCycles()" style="padding:6px 14px;border-radius:6px;border:none;background:var(--acc);color:#fff;font-size:11px;font-weight:800;cursor:pointer">💾 Save Timeline</button>
       </span>
     </div>
     <div class="tl-legend">

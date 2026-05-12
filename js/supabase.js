@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=56';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=56';
-import { compoundFromDB } from './models.js?v=56';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=57';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek, TL } from './state.js?v=57';
+import { compoundFromDB } from './models.js?v=57';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -261,6 +261,45 @@ export async function saveBudgetToDB(){
     })
   });
   S.budSelByQuarter[S.budQuarter] = new Set(S.budSel);
+  showSaveInd();
+}
+
+// ── TIMELINE CYCLES (per quarter per compound) ──
+// Key di TL.cycles: `${qid}|${name}` → { on, off, start, dose? }
+export async function loadAllTLCycles(){
+  Object.keys(TL.cycles).forEach(k => delete TL.cycles[k]);
+  if(!S.user) return;
+  const data = await authFetch('timeline_cycles',
+    `select=quarter_id,compound_name,on_weeks,off_weeks,start_week,dose_override&user_id=eq.${S.user.id}`);
+  (data||[]).forEach(r => {
+    const key = `${r.quarter_id}|${r.compound_name}`;
+    const cycle = { on: r.on_weeks||0, off: r.off_weeks||0, start: r.start_week||1 };
+    if(r.dose_override !== null && r.dose_override !== undefined) cycle.dose = r.dose_override;
+    TL.cycles[key] = cycle;
+  });
+}
+
+export async function saveTLCycles(){
+  if(!S.user){ alert('Login dulu untuk simpan timeline.'); return; }
+  const rows = Object.entries(TL.cycles).map(([key, cyc]) => {
+    const [quarter_id, compound_name] = key.split('|');
+    return {
+      user_id: S.user.id,
+      quarter_id,
+      compound_name,
+      on_weeks: cyc.on||0,
+      off_weeks: cyc.off||0,
+      start_week: cyc.start||1,
+      dose_override: (cyc.dose !== undefined && cyc.dose > 0) ? cyc.dose : null,
+      updated_at: new Date().toISOString()
+    };
+  });
+  if(rows.length === 0){ showSaveInd(); return; }
+  await authFetch('timeline_cycles', 'on_conflict=user_id,quarter_id,compound_name', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(rows)
+  });
   showSaveInd();
 }
 
@@ -713,6 +752,7 @@ export function setupAuthListener(){
     await Promise.allSettled([
       withTimeout(loadBudgetFromDB(S.budQuarter), 8000, 'budget'),
       withTimeout(loadAllBudgetSelections(), 8000, 'budgetAll'),
+      withTimeout(loadAllTLCycles(), 8000, 'tlCycles'),
       withTimeout(loadCustomDoses(), 8000, 'customDoses'),
       withTimeout(loadInventory(), 8000, 'inventory'),
       withTimeout(loadReconVials(), 8000, 'reconVials'),
