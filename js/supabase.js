@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=54';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=54';
-import { compoundFromDB } from './models.js?v=54';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=55';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=55';
+import { compoundFromDB } from './models.js?v=55';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -95,7 +95,7 @@ export async function loadAllPepData(){
   let compoundRows, ruleRows;
   try {
     dbg('fetch compounds...');
-    compoundRows = await restFetch('compounds', `select=${COMPOUND_COLS}&order=name.asc`);
+    compoundRows = await restFetch('compounds', `select=${COMPOUND_COLS}&order=efficiency_score.desc.nullslast,name.asc`);
     dbg(`compounds:${compoundRows.length} · fetch rules...`);
     ruleRows = await restFetch('redundancy_rules', 'select=*&order=sort_order.asc');
     dbg(`rules:${ruleRows.length} · transforming...`);
