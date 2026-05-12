@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=44';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=45';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=44';
-import * as stateModule from './state.js?v=44';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=44';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=45';
+import * as stateModule from './state.js?v=45';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=45';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=44';
+} from './supabase.js?v=45';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=44';
-import * as panelFns from './panels.js?v=44';
-import * as supaFns from './supabase.js?v=44';
+} from './panels.js?v=45';
+import * as panelFns from './panels.js?v=45';
+import * as supaFns from './supabase.js?v=45';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -89,19 +89,17 @@ function renderQuarterRow(){
   const grandWeeks = allStats.reduce((a,q) => a + q.weeks.length, 0);
 
   const allCardClass = S.viewAll ? 'ph-card sel-all sel-all-active' : 'ph-card sel-all';
-  const allCard = `<div class="${allCardClass}" style="grid-column:1/-1;cursor:pointer" onclick="setViewAll(true)">
+  const allCard = `<div class="${allCardClass}" style="cursor:pointer" onclick="setViewAll(true)">
     <div class="ph-tag" style="color:var(--acc)">
       <div class="ph-dot" style="background:var(--acc)"></div>
-      GRAND TOTAL · ${QUARTERS.length} QUARTERS (2026–2028) ${S.viewAll?'<span style="margin-left:8px;padding:2px 8px;background:var(--acc);color:#fff;border-radius:10px;font-size:9px">AKTIF</span>':''}
+      GRAND TOTAL · ${QUARTERS.length}Q ${S.viewAll?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
     </div>
-    <div class="ph-name">Multi-Quarter Protocol Overview</div>
-    <div class="ph-desc">${grandCompounds} compounds aktif (terpilih di Decision Matrix) · ${grandWeeks} minggu total dose · biaya kumulatif dari DM</div>
-    <div class="ph-grid">
-      <div class="ph-stat"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:var(--acc)">${rpM(grandTotal)}</div></div>
+    <div class="ph-name">Multi-Quarter Overview</div>
+    <div class="ph-desc">${grandCompounds} compounds · ${grandWeeks} minggu · ${allStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length} active</div>
+    <div class="ph-grid" style="grid-template-columns:1fr 1fr">
+      <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:var(--acc);font-size:18px">${rpM(grandTotal)}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${grandCompounds}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Total Vials</div><div class="ph-stat-v">${grandVials}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Total Weeks</div><div class="ph-stat-v">${grandWeeks}</div></div>
-      <div class="ph-stat"><div class="ph-stat-l">Active Q</div><div class="ph-stat-v">${allStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length}</div></div>
     </div>
   </div>`;
 
@@ -133,7 +131,9 @@ function renderQuarterRow(){
     </div>`;
   }).join('');
 
-  document.getElementById('phase-row').innerHTML = allCard + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">${quarterCards}</div>`;
+  // Layout: Grand Total (1.4fr) + 4 quarter cards (1fr each) di 1 baris
+  document.getElementById('phase-row').innerHTML =
+    `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px">${allCard}${quarterCards}</div>`;
 }
 window.renderQuarterRow = renderQuarterRow;
 
