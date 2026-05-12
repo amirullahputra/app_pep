@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=43';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=43';
-import { compoundFromDB } from './models.js?v=43';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=44';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=44';
+import { compoundFromDB } from './models.js?v=44';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -499,10 +499,42 @@ export function updateAuthUI(user){
 export function onAuthBtnClick(){
   const btn=document.getElementById('auth-action-btn');
   if(btn.classList.contains('logout')){
-    supa.auth.signOut();
+    doLogout();
   }else{
     openAuthModal();
   }
+}
+
+// Logout manual — bypass supa.auth.signOut() yang hang (GoTrueClient lock).
+// Clear localStorage session + JWT cache + reset UI state.
+export function doLogout(){
+  // 1. Clear Supabase session di localStorage
+  const projectRef = SUPA_URL.match(/https:\/\/([^.]+)/)?.[1];
+  if(projectRef){
+    localStorage.removeItem(`sb-${projectRef}-auth-token`);
+    // Hapus juga key lain yang prefix-nya sama (Supabase kadang stash multiple)
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(`sb-${projectRef}-`))
+      .forEach(k => localStorage.removeItem(k));
+  }
+
+  // 2. Reset module state
+  _jwt = null;
+  S.user = null;
+
+  // 3. Clear user-data caches (sync dengan onAuthStateChange branch !user)
+  Object.keys(customDoses).forEach(k=>delete customDoses[k]);
+  Object.keys(inventoryCache).forEach(k=>delete inventoryCache[k]);
+  Object.keys(reconCache).forEach(k=>delete reconCache[k]);
+  S.budSel = new Set();
+
+  // 4. Update UI
+  updateAuthUI(null);
+  window.renderPanels && window.renderPanels();
+
+  // 5. Best-effort supa.auth.signOut() async di background (kalau ga hang,
+  // bagus untuk sinkron dengan Supabase backend; kalau hang, ga ngeblok user)
+  try { supa.auth.signOut(); } catch(_){}
 }
 
 export async function doLogin(){
