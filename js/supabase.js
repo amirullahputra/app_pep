@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=50';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=50';
-import { compoundFromDB } from './models.js?v=50';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=51';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=51';
+import { compoundFromDB } from './models.js?v=51';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -381,7 +381,7 @@ export async function loadReconVials(){
   Object.keys(reconCache).forEach(k=>delete reconCache[k]);
   if(!S.user)return;
   const data = await authFetch('reconstituted_vials',
-    `select=id,compound_name,qty_vials,reconstituted_at,notes,diluent_type,volume_ml,syringe_scale_iu&user_id=eq.${S.user.id}&order=reconstituted_at.desc`);
+    `select=id,compound_name,qty_vials,reconstituted_at,notes,diluent_type,volume_ml,syringe_scale_iu,freq_per_week&user_id=eq.${S.user.id}&order=reconstituted_at.desc`);
   (data||[]).forEach(r=>{
     const sl=SHELF_LIFE[r.compound_name];
     const reconDate=new Date(r.reconstituted_at);
@@ -400,12 +400,13 @@ export async function loadReconVials(){
       notes:r.notes||'',
       diluentType:dil,
       volumeMl:r.volume_ml||null,
-      syringeScaleIu:r.syringe_scale_iu||100
+      syringeScaleIu:r.syringe_scale_iu||100,
+      freqPerWeek:r.freq_per_week||null
     });
   });
 }
 
-export async function addReconVial(compoundName, qty, reconDateStr, notes, diluent, volumeMl, syringeIu){
+export async function addReconVial(compoundName, qty, reconDateStr, notes, diluent, volumeMl, syringeIu, freqPerWeek){
   if(!S.user){alert('Login dulu!');return;}
   let data;
   try {
@@ -417,7 +418,8 @@ export async function addReconVial(compoundName, qty, reconDateStr, notes, dilue
         qty_vials: qty, reconstituted_at: reconDateStr, notes: notes || null,
         diluent_type: diluent || 'BAC',
         volume_ml: volumeMl || null,
-        syringe_scale_iu: syringeIu || 100
+        syringe_scale_iu: syringeIu || 100,
+        freq_per_week: freqPerWeek || null
       })
     });
   } catch(e){ alert('Gagal simpan: '+(e.message||e)); return; }
@@ -431,7 +433,7 @@ export async function addReconVial(compoundName, qty, reconDateStr, notes, dilue
   const expiredAt=new Date(reconDate);
   expiredAt.setDate(expiredAt.getDate()+shelfDays);
   if(!reconCache[compoundName])reconCache[compoundName]=[];
-  reconCache[compoundName].unshift({id:row.id,qty,reconDate,expiredAt,notes:notes||'',diluentType:dil,volumeMl:volumeMl||null,syringeScaleIu:syringeIu||100});
+  reconCache[compoundName].unshift({id:row.id,qty,reconDate,expiredAt,notes:notes||'',diluentType:dil,volumeMl:volumeMl||null,syringeScaleIu:syringeIu||100,freqPerWeek:freqPerWeek||null});
   showSaveInd();
   window.renderPanels();
 }
@@ -457,6 +459,9 @@ export function openReconModal(name){
   document.getElementById('recon-diluent-input').value='BAC';
   document.getElementById('recon-volume-input').value=2;
   document.getElementById('recon-syringe-input').value=100;
+  // Pre-fill freq dari compound default (user bisa override)
+  const _cDef = COMPOUNDS.find(x=>x.name===name);
+  document.getElementById('recon-freq-input').value = _cDef?.freqPerWeek || 7;
 
   // Render protocol info dari compound (read-only)
   const c = COMPOUNDS.find(x => x.name === name);
@@ -486,7 +491,7 @@ export function openReconModal(name){
       const expCol=daysLeft<=3?'var(--warn)':daysLeft<=7?'var(--f2)':'var(--f3)';
       const expFmt=e.expiredAt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
       const reconFmt=e.reconDate.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
-      const diluentInfo = e.volumeMl ? ` · ${e.volumeMl}ml ${e.diluentType||'BAC'}` : '';
+      const diluentInfo = e.volumeMl ? ` · ${e.volumeMl}ml ${e.diluentType||'BAC'}${e.freqPerWeek?` · ${e.freqPerWeek}×/wk`:''}` : '';
       return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr)">
         <div style="flex:1">
           <div style="font-size:12px;font-weight:700;color:var(--t0)">${e.qty} vial — ${reconFmt}${diluentInfo}</div>
@@ -513,6 +518,7 @@ export function recalcReconIU(){
   const volume  = parseFloat(document.getElementById('recon-volume-input').value) || 0;
   const syringe = parseInt(document.getElementById('recon-syringe-input').value) || 100;
   const diluent = document.getElementById('recon-diluent-input').value || 'BAC';
+  const freqPerWeek = parseInt(document.getElementById('recon-freq-input').value) || 0;
 
   if(!volume || !c.vialSize){
     out.innerHTML = '<div style="color:var(--t3)">Isi volume diluent untuk lihat kalibrasi IU</div>';
@@ -522,15 +528,15 @@ export function recalcReconIU(){
   // Konsentrasi dalam vial_unit/ml (mg/ml atau mcg/ml)
   const conc = c.vialSize / volume;  // e.g. 10mg / 2ml = 5 mg/ml
 
-  // Per inject dose dalam vial_unit (sama dengan vialUnit, ga perlu convert)
-  // perInjectValue stored dalam unit yang sama dengan vial_unit? Asumsi YA per design.
-  // Tapi kalau weeklyDoseUnit beda dari vialUnit, perlu convert.
-  let perInjectInVU = c.perInjectValue || 0;
+  // Weekly dose dalam vial_unit
+  let weeklyInVU = c.weeklyDoseValue || 0;
   if(c.weeklyDoseUnit && c.vialUnit && c.weeklyDoseUnit !== c.vialUnit){
-    // Convert via mg-normalized field
-    if(c.vialUnit === 'mg' && c.perInjectMg) perInjectInVU = c.perInjectMg;
-    else if(c.vialUnit === 'mcg' && c.perInjectMg) perInjectInVU = c.perInjectMg * 1000;
+    if(c.vialUnit === 'mg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg;
+    else if(c.vialUnit === 'mcg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg * 1000;
   }
+
+  // Per inject = weekly / freq (USER nentuin freq, bukan compound profile)
+  const perInjectInVU = freqPerWeek > 0 ? weeklyInVU / freqPerWeek : 0;
 
   // Volume per inject (ml) = perInjectInVU / conc
   const volumePerInject = perInjectInVU > 0 ? perInjectInVU / conc : 0;
@@ -540,7 +546,6 @@ export function recalcReconIU(){
   const totalInjects = perInjectInVU > 0 ? Math.floor(c.vialSize / perInjectInVU) : 0;
 
   // Days to finish (totalInjects across qty vials / freq per day)
-  const freqPerWeek = c.freqPerWeek || 0;
   const totalInjectsAcrossQty = totalInjects * qty;
   const daysToFinish = freqPerWeek > 0 ? Math.ceil(totalInjectsAcrossQty / (freqPerWeek / 7)) : 0;
 
@@ -562,7 +567,7 @@ export function recalcReconIU(){
       <div><span style="color:var(--t3)">Konsentrasi:</span> <b>${concFmt} ${c.vialUnit}/ml</b></div>
       <div><span style="color:var(--t3)">Vol/inject:</span> <b>${ivFmt} ml</b></div>
       <div style="grid-column:1/-1;padding:6px 10px;background:#7c3aed11;border-radius:6px;text-align:center">
-        <span style="color:var(--t3);font-size:10.5px">Per inject (${perInjectInVU} ${c.vialUnit}) di syringe ${syringe} IU/ml =</span>
+        <span style="color:var(--t3);font-size:10.5px">Per inject (${perInjectInVU.toFixed(perInjectInVU<1?2:1)} ${c.vialUnit}) × ${freqPerWeek}/wk di syringe ${syringe} IU/ml =</span>
         <span style="display:block;font-size:18px;font-weight:800;color:#7c3aed;font-family:'JetBrains Mono',monospace">${iuFmt} IU</span>
       </div>
       <div><span style="color:var(--t3)">Inject/vial:</span> <b>${totalInjects}×</b></div>
@@ -586,10 +591,12 @@ export async function confirmReconAdd(){
   const diluent=document.getElementById('recon-diluent-input').value||'BAC';
   const volumeMl=parseFloat(document.getElementById('recon-volume-input').value)||null;
   const syringeIu=parseInt(document.getElementById('recon-syringe-input').value)||100;
+  const freqPerWeek=parseInt(document.getElementById('recon-freq-input').value)||null;
   if(!qty||qty<1){alert('Jumlah vial harus ≥1');return;}
   if(!dateStr){alert('Tanggal rekonstituasi wajib diisi');return;}
+  if(!freqPerWeek||freqPerWeek<1){alert('Frekuensi injeksi per minggu wajib diisi');return;}
   closeReconModal();
-  await addReconVial(name,qty,dateStr,notes,diluent,volumeMl,syringeIu);
+  await addReconVial(name,qty,dateStr,notes,diluent,volumeMl,syringeIu,freqPerWeek);
 }
 
 // ── AUTH ──

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=50';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=51';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=50';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=50';
+} from './state.js?v=51';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=51';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=50';
+import * as stateModule from './state.js?v=51';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -605,28 +605,35 @@ export function pVial(){
         <div style="font-size:9px;color:var(--t3);margin-top:1px">${sl?.timing||'—'}</div>
       </td>
       <td class="c" style="vertical-align:top;padding-top:10px">
-        ${c.freqPerWeek
-          ?`<div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:var(--t0)">${c.freqPerWeek}×</div>
-            <div style="font-size:9px;color:var(--t3);font-weight:700">/ minggu</div>`
-          :`<div style="font-size:10px;color:var(--t3)">—</div>`}
+        ${(()=>{
+          const latest=reconList[0];
+          const f=latest?.freqPerWeek||c.freqPerWeek||0;
+          if(!f)return `<div style="font-size:10px;color:var(--t3)">—</div>`;
+          const src=latest?.freqPerWeek?'batch':'default';
+          return `<div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:var(--t0)">${f}×</div>
+            <div style="font-size:9px;color:var(--t3);font-weight:700">/ minggu · ${src}</div>`;
+        })()}
         ${expiredRecon.length?`<div style="font-size:9px;color:var(--warn);font-weight:800;margin-top:2px">${expiredRecon.length} EXP</div>`:''}
       </td>
       <td class="c" style="vertical-align:top;padding-top:10px">
         ${(()=>{
-          if(!c.vialSize||!c.perInjectValue){return `<div style="font-size:10px;color:var(--t3)">—</div>`;}
+          if(!c.vialSize||!c.weeklyDoseValue){return `<div style="font-size:10px;color:var(--t3)">—</div>`;}
           const latest=reconList[0];
           const vol=latest?.volumeMl||2;
           const syr=latest?.syringeScaleIu||100;
-          let perInjVU=c.perInjectValue;
+          const freq=latest?.freqPerWeek||c.freqPerWeek||0;
+          if(!freq)return `<div style="font-size:10px;color:var(--t3)">isi freq</div>`;
+          let weeklyVU=c.weeklyDoseValue;
           if(c.weeklyDoseUnit&&c.vialUnit&&c.weeklyDoseUnit!==c.vialUnit){
-            if(c.vialUnit==='mg'&&c.perInjectMg)perInjVU=c.perInjectMg;
-            else if(c.vialUnit==='mcg'&&c.perInjectMg)perInjVU=c.perInjectMg*1000;
+            if(c.vialUnit==='mg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg;
+            else if(c.vialUnit==='mcg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg*1000;
           }
+          const perInjVU=weeklyVU/freq;
           const conc=c.vialSize/vol;
           const volPI=conc>0?perInjVU/conc:0;
           const iu=volPI*syr;
           if(!iu)return `<div style="font-size:10px;color:var(--t3)">—</div>`;
-          const label=latest?`${vol}ml · ${syr}`:`default 2ml · 100`;
+          const label=latest?`${vol}ml · ${syr}IU`:`default 2ml · 100`;
           return `<div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:#7c3aed">${iu.toFixed(iu<10?1:0)} <span style="font-size:10px">IU</span></div>
             <div style="font-size:9px;color:var(--t3);font-weight:700">${label}</div>`;
         })()}
@@ -731,8 +738,8 @@ export function pVial(){
           </div>
         </div>
 
-        <!-- Row 2: diluent + volume + syringe scale -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <!-- Row 2: diluent + volume + syringe scale + freq -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px">
           <div>
             <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">DILUENT</label>
             <select id="recon-diluent-input" oninput="window.recalcReconIU&&window.recalcReconIU()"
@@ -754,6 +761,11 @@ export function pVial(){
               <option value="100">100 IU/ml</option>
               <option value="50">50 IU/ml</option>
             </select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">INJEK/WK</label>
+            <input id="recon-freq-input" type="number" min="1" max="21" value="7" oninput="window.recalcReconIU&&window.recalcReconIU()"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--bg2);color:var(--t0)">
           </div>
         </div>
 
