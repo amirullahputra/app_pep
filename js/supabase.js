@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=53';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=53';
-import { compoundFromDB } from './models.js?v=53';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=54';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=54';
+import { compoundFromDB } from './models.js?v=54';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -179,7 +179,7 @@ export async function setDMStage(userId, quarterId, compoundName, stage){
     user_id: userId, quarter_id: quarterId, compound_name: compoundName, stage,
     updated_at: new Date().toISOString()
   };
-  await authFetch('decision_matrix_stages', '', {
+  await authFetch('decision_matrix_stages', 'on_conflict=user_id,quarter_id,compound_name', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify(row)
@@ -238,7 +238,7 @@ export async function loadBudgetFromDB(qid){
 
 export async function saveBudgetToDB(){
   if(!S.user)return;
-  await authFetch('budget_selections', '', {
+  await authFetch('budget_selections', 'on_conflict=user_id,quarter_id', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({
@@ -270,7 +270,7 @@ export async function saveCustomDose(compoundName,week,dose){
       { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     if(customDoses[compoundName])delete customDoses[compoundName][week];
   }else{
-    await authFetch('custom_doses', '', {
+    await authFetch('custom_doses', 'on_conflict=user_id,compound_name,week', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
@@ -369,8 +369,8 @@ export async function confirmInvEdit(){
   inventoryCache[name].safetyStock=ss;
   const upsertOpts = { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'} };
   await Promise.all([
-    authFetch('inventory', '', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,qty_vials:qty,last_updated:new Date().toISOString()}) }),
-    authFetch('safety_stock', '', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,min_vials:ss}) })
+    authFetch('inventory', 'on_conflict=user_id,compound_name', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,qty_vials:qty,last_updated:new Date().toISOString()}) }),
+    authFetch('safety_stock', 'on_conflict=user_id,compound_name', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,min_vials:ss}) })
   ]);
   showSaveInd();
   window.renderPanels();
