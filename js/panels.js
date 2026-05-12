@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=48';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=49';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=48';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=48';
+} from './state.js?v=49';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=49';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=48';
+import * as stateModule from './state.js?v=49';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -681,18 +681,26 @@ export function pVial(){
   </div>
 
   <div id="recon-modal" class="modal-overlay" onclick="if(event.target===this)closeReconModal()">
-    <div class="modal-box" style="max-width:420px">
+    <div class="modal-box" style="max-width:520px">
       <button class="modal-close" onclick="closeReconModal()">✕</button>
       <div class="modal-title" id="recon-modal-title">Rekonstituasi Vial</div>
-      <div class="modal-sub">Catat vial yang sudah direkonstituasi. Expired otomatis dihitung dari shelf life.</div>
+      <div class="modal-sub">Catat vial yang sudah direkonstituasi + kalibrasi IU syringe.</div>
       <input type="hidden" id="recon-modal-name">
-      <div id="recon-existing" style="margin-bottom:14px;max-height:180px;overflow-y:auto"></div>
+
+      <!-- Protocol info (read-only, auto dari compound) -->
+      <div id="recon-protocol-info" style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r2);padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--t2)"></div>
+
+      <!-- Existing recon history -->
+      <div id="recon-existing" style="margin-bottom:14px;max-height:160px;overflow-y:auto"></div>
+
       <div style="border-top:1px solid var(--bdr);padding-top:12px;margin-bottom:4px">
         <div style="font-size:10px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">+ Tambah Entri Rekonstituasi</div>
+
+        <!-- Row 1: qty + date -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
             <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">JUMLAH VIAL</label>
-            <input id="recon-qty-input" type="number" min="1" value="1"
+            <input id="recon-qty-input" type="number" min="1" value="1" oninput="window.recalcReconIU&&window.recalcReconIU()"
               style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--bg2);color:var(--t0)">
           </div>
           <div>
@@ -701,6 +709,36 @@ export function pVial(){
               style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:13px;font-weight:600;background:var(--bg2);color:var(--t0)">
           </div>
         </div>
+
+        <!-- Row 2: diluent + volume + syringe scale -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">DILUENT</label>
+            <select id="recon-diluent-input" oninput="window.recalcReconIU&&window.recalcReconIU()"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:12px;font-weight:600;background:var(--bg2);color:var(--t0)">
+              <option value="BAC">BAC water</option>
+              <option value="Lipozide">Lipozide</option>
+              <option value="Saline">Saline</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">VOLUME (ml)</label>
+            <input id="recon-volume-input" type="number" min="0.1" step="0.1" value="2" oninput="window.recalcReconIU&&window.recalcReconIU()"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--bg2);color:var(--t0)">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">SYRINGE</label>
+            <select id="recon-syringe-input" oninput="window.recalcReconIU&&window.recalcReconIU()"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:var(--r);font-size:12px;font-weight:600;background:var(--bg2);color:var(--t0)">
+              <option value="100">100 IU/ml</option>
+              <option value="50">50 IU/ml</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Computed display (live update) -->
+        <div id="recon-calc-output" style="background:linear-gradient(135deg,#7c3aed11,#7c3aed05);border:1px solid #7c3aed44;border-radius:var(--r2);padding:10px 12px;margin-bottom:10px;font-size:11.5px"></div>
+
         <div style="margin-bottom:12px">
           <label style="font-size:10px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px">CATATAN (opsional)</label>
           <input id="recon-notes-input" type="text" placeholder="misal: batch A, sudah dibuka..."

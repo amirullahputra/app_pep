@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=48';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=48';
-import { compoundFromDB } from './models.js?v=48';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=49';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=49';
+import { compoundFromDB } from './models.js?v=49';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -381,11 +381,14 @@ export async function loadReconVials(){
   Object.keys(reconCache).forEach(k=>delete reconCache[k]);
   if(!S.user)return;
   const data = await authFetch('reconstituted_vials',
-    `select=id,compound_name,qty_vials,reconstituted_at,notes&user_id=eq.${S.user.id}&order=reconstituted_at.desc`);
+    `select=id,compound_name,qty_vials,reconstituted_at,notes,diluent_type,volume_ml,syringe_scale_iu&user_id=eq.${S.user.id}&order=reconstituted_at.desc`);
   (data||[]).forEach(r=>{
     const sl=SHELF_LIFE[r.compound_name];
     const reconDate=new Date(r.reconstituted_at);
-    const shelfDays=sl?.shelf||30;
+    const baseShelf=sl?.shelf||30;
+    const dil=r.diluent_type||'BAC';
+    const mult=dil==='Lipozide'?2.5:dil==='Saline'?0.7:1.0;
+    const shelfDays=Math.round(baseShelf*mult);
     const expiredAt=new Date(reconDate);
     expiredAt.setDate(expiredAt.getDate()+shelfDays);
     if(!reconCache[r.compound_name])reconCache[r.compound_name]=[];
@@ -394,12 +397,15 @@ export async function loadReconVials(){
       qty:r.qty_vials,
       reconDate,
       expiredAt,
-      notes:r.notes||''
+      notes:r.notes||'',
+      diluentType:dil,
+      volumeMl:r.volume_ml||null,
+      syringeScaleIu:r.syringe_scale_iu||100
     });
   });
 }
 
-export async function addReconVial(compoundName, qty, reconDateStr, notes){
+export async function addReconVial(compoundName, qty, reconDateStr, notes, diluent, volumeMl, syringeIu){
   if(!S.user){alert('Login dulu!');return;}
   let data;
   try {
@@ -408,18 +414,24 @@ export async function addReconVial(compoundName, qty, reconDateStr, notes){
       headers: { Prefer: 'return=representation' },
       body: JSON.stringify({
         user_id: S.user.id, compound_name: compoundName,
-        qty_vials: qty, reconstituted_at: reconDateStr, notes: notes || null
+        qty_vials: qty, reconstituted_at: reconDateStr, notes: notes || null,
+        diluent_type: diluent || 'BAC',
+        volume_ml: volumeMl || null,
+        syringe_scale_iu: syringeIu || 100
       })
     });
   } catch(e){ alert('Gagal simpan: '+(e.message||e)); return; }
   const row = Array.isArray(data) ? data[0] : data;
   const sl=SHELF_LIFE[compoundName];
   const reconDate=new Date(reconDateStr);
-  const shelfDays=sl?.shelf||30;
+  const baseShelf=sl?.shelf||30;
+  const dil=diluent||'BAC';
+  const mult=dil==='Lipozide'?2.5:dil==='Saline'?0.7:1.0;
+  const shelfDays=Math.round(baseShelf*mult);
   const expiredAt=new Date(reconDate);
   expiredAt.setDate(expiredAt.getDate()+shelfDays);
   if(!reconCache[compoundName])reconCache[compoundName]=[];
-  reconCache[compoundName].unshift({id:row.id,qty,reconDate,expiredAt,notes:notes||''});
+  reconCache[compoundName].unshift({id:row.id,qty,reconDate,expiredAt,notes:notes||'',diluentType:dil,volumeMl:volumeMl||null,syringeScaleIu:syringeIu||100});
   showSaveInd();
   window.renderPanels();
 }
@@ -442,9 +454,30 @@ export function openReconModal(name){
   document.getElementById('recon-qty-input').value=1;
   document.getElementById('recon-date-input').value=new Date().toISOString().split('T')[0];
   document.getElementById('recon-notes-input').value='';
-  // render existing recon entries
+  document.getElementById('recon-diluent-input').value='BAC';
+  document.getElementById('recon-volume-input').value=2;
+  document.getElementById('recon-syringe-input').value=100;
+
+  // Render protocol info dari compound (read-only)
+  const c = COMPOUNDS.find(x => x.name === name);
+  const protoEl = document.getElementById('recon-protocol-info');
+  if(c && protoEl){
+    const wkDose  = c.weeklyDoseValue ? `${c.weeklyDoseValue} ${c.weeklyDoseUnit||'mg'}/wk` : '—';
+    const perInj  = c.perInjectValue  ? `${c.perInjectValue} ${c.weeklyDoseUnit||'mg'}` : '—';
+    const freq    = c.freqPerWeek     ? `${c.freqPerWeek}×/minggu` : '—';
+    const vialSz  = c.vialSize ? `${c.vialSize} ${c.vialUnit||'mg'}/vial` : '—';
+    protoEl.innerHTML = `
+      <div style="font-size:10px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Protocol</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+        <div><span style="color:var(--t3)">Vial:</span> <b style="color:var(--t0)">${vialSz}</b></div>
+        <div><span style="color:var(--t3)">Per inject:</span> <b style="color:var(--t0)">${perInj}</b></div>
+        <div><span style="color:var(--t3)">Frequency:</span> <b style="color:var(--t0)">${freq}</b></div>
+        <div><span style="color:var(--t3)">Weekly:</span> <b style="color:var(--t0)">${wkDose}</b></div>
+      </div>`;
+  }
+
+  // Render existing recon entries
   const entries=reconCache[name]||[];
-  const sl=SHELF_LIFE[name];
   const today=new Date();
   document.getElementById('recon-existing').innerHTML=entries.length===0
     ?'<div style="color:var(--t3);font-size:11px;padding:8px 0">Belum ada vial yang direkonstitusi</div>'
@@ -453,16 +486,94 @@ export function openReconModal(name){
       const expCol=daysLeft<=3?'var(--warn)':daysLeft<=7?'var(--f2)':'var(--f3)';
       const expFmt=e.expiredAt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
       const reconFmt=e.reconDate.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
+      const diluentInfo = e.volumeMl ? ` · ${e.volumeMl}ml ${e.diluentType||'BAC'}` : '';
       return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr)">
         <div style="flex:1">
-          <div style="font-size:12px;font-weight:700;color:var(--t0)">${e.qty} vial — Rekon: ${reconFmt}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--t0)">${e.qty} vial — ${reconFmt}${diluentInfo}</div>
           <div style="font-size:10px;color:${expCol};font-weight:700">Exp: ${expFmt} (${daysLeft>0?daysLeft+'h lagi':'EXPIRED'})</div>
           ${e.notes?`<div style="font-size:10px;color:var(--t2)">${e.notes}</div>`:''}
         </div>
         <button onclick="deleteReconVial('${e.id}','${name}')" style="padding:4px 10px;border-radius:var(--r);border:1px solid var(--warn-bdr);background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;cursor:pointer">Hapus</button>
       </div>`;
     }).join('');
+
   document.getElementById('recon-modal').classList.add('open');
+  // Trigger initial calc
+  window.recalcReconIU && window.recalcReconIU();
+}
+
+// Live calculator: konsentrasi + IU per inject + vial habis kapan
+export function recalcReconIU(){
+  const name = document.getElementById('recon-modal-name')?.value;
+  const c = COMPOUNDS.find(x => x.name === name);
+  const out = document.getElementById('recon-calc-output');
+  if(!c || !out) return;
+
+  const qty     = parseFloat(document.getElementById('recon-qty-input').value) || 1;
+  const volume  = parseFloat(document.getElementById('recon-volume-input').value) || 0;
+  const syringe = parseInt(document.getElementById('recon-syringe-input').value) || 100;
+  const diluent = document.getElementById('recon-diluent-input').value || 'BAC';
+
+  if(!volume || !c.vialSize){
+    out.innerHTML = '<div style="color:var(--t3)">Isi volume diluent untuk lihat kalibrasi IU</div>';
+    return;
+  }
+
+  // Konsentrasi dalam vial_unit/ml (mg/ml atau mcg/ml)
+  const conc = c.vialSize / volume;  // e.g. 10mg / 2ml = 5 mg/ml
+
+  // Per inject dose dalam vial_unit (sama dengan vialUnit, ga perlu convert)
+  // perInjectValue stored dalam unit yang sama dengan vial_unit? Asumsi YA per design.
+  // Tapi kalau weeklyDoseUnit beda dari vialUnit, perlu convert.
+  let perInjectInVU = c.perInjectValue || 0;
+  if(c.weeklyDoseUnit && c.vialUnit && c.weeklyDoseUnit !== c.vialUnit){
+    // Convert via mg-normalized field
+    if(c.vialUnit === 'mg' && c.perInjectMg) perInjectInVU = c.perInjectMg;
+    else if(c.vialUnit === 'mcg' && c.perInjectMg) perInjectInVU = c.perInjectMg * 1000;
+  }
+
+  // Volume per inject (ml) = perInjectInVU / conc
+  const volumePerInject = perInjectInVU > 0 ? perInjectInVU / conc : 0;
+  const iuMark = volumePerInject * syringe;  // 100 IU/ml means 1ml = 100 IU
+
+  // Total injections per vial
+  const totalInjects = perInjectInVU > 0 ? Math.floor(c.vialSize / perInjectInVU) : 0;
+
+  // Days to finish (totalInjects across qty vials / freq per day)
+  const freqPerWeek = c.freqPerWeek || 0;
+  const totalInjectsAcrossQty = totalInjects * qty;
+  const daysToFinish = freqPerWeek > 0 ? Math.ceil(totalInjectsAcrossQty / (freqPerWeek / 7)) : 0;
+
+  // Shelf life (diluent affects — Lipozide longer)
+  const baseShelf = c.shelfLifeDays || 30;
+  const shelfMultiplier = diluent === 'Lipozide' ? 2.5 : diluent === 'Saline' ? 0.7 : 1.0;
+  const effectiveShelf = Math.round(baseShelf * shelfMultiplier);
+
+  // Effective expiry = min(shelf, days to finish)
+  const effectiveDays = daysToFinish > 0 ? Math.min(effectiveShelf, daysToFinish) : effectiveShelf;
+
+  const concFmt = conc < 1 ? conc.toFixed(2) : conc.toFixed(1);
+  const ivFmt   = volumePerInject < 0.01 ? volumePerInject.toFixed(3) : volumePerInject.toFixed(2);
+  const iuFmt   = iuMark < 1 ? iuMark.toFixed(2) : Math.round(iuMark * 10) / 10;
+
+  out.innerHTML = `
+    <div style="font-size:9.5px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚗ Kalibrasi IU Syringe</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:var(--t1)">
+      <div><span style="color:var(--t3)">Konsentrasi:</span> <b>${concFmt} ${c.vialUnit}/ml</b></div>
+      <div><span style="color:var(--t3)">Vol/inject:</span> <b>${ivFmt} ml</b></div>
+      <div style="grid-column:1/-1;padding:6px 10px;background:#7c3aed11;border-radius:6px;text-align:center">
+        <span style="color:var(--t3);font-size:10.5px">Per inject (${perInjectInVU} ${c.vialUnit}) di syringe ${syringe} IU/ml =</span>
+        <span style="display:block;font-size:18px;font-weight:800;color:#7c3aed;font-family:'JetBrains Mono',monospace">${iuFmt} IU</span>
+      </div>
+      <div><span style="color:var(--t3)">Inject/vial:</span> <b>${totalInjects}×</b></div>
+      <div><span style="color:var(--t3)">Total injects:</span> <b>${totalInjectsAcrossQty}× (${qty} vial)</b></div>
+      <div><span style="color:var(--t3)">Habis dalam:</span> <b>${daysToFinish || '—'} hari</b></div>
+      <div><span style="color:var(--t3)">Shelf (${diluent}):</span> <b>${effectiveShelf} hari</b></div>
+      <div style="grid-column:1/-1;text-align:center;padding-top:4px;border-top:1px dashed #7c3aed44;margin-top:4px">
+        <span style="color:var(--t3);font-size:10.5px">Effective expiry: </span>
+        <b style="color:#7c3aed;font-size:13px">${effectiveDays} hari</b>
+      </div>
+    </div>`;
 }
 
 export function closeReconModal(){document.getElementById('recon-modal').classList.remove('open');}
@@ -472,10 +583,13 @@ export async function confirmReconAdd(){
   const qty=parseInt(document.getElementById('recon-qty-input').value)||0;
   const dateStr=document.getElementById('recon-date-input').value;
   const notes=document.getElementById('recon-notes-input').value.trim();
+  const diluent=document.getElementById('recon-diluent-input').value||'BAC';
+  const volumeMl=parseFloat(document.getElementById('recon-volume-input').value)||null;
+  const syringeIu=parseInt(document.getElementById('recon-syringe-input').value)||100;
   if(!qty||qty<1){alert('Jumlah vial harus ≥1');return;}
   if(!dateStr){alert('Tanggal rekonstituasi wajib diisi');return;}
   closeReconModal();
-  await addReconVial(name,qty,dateStr,notes);
+  await addReconVial(name,qty,dateStr,notes,diluent,volumeMl,syringeIu);
 }
 
 // ── AUTH ──
