@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=38';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=39';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -151,13 +151,16 @@ export function sportScore(name){
   return Math.round((s.z2*.3+s.pw*.2+s.rc*.2+s.hr*.15+s.cn*.15)*20);
 }
 export function getConflicts(){
-  // Pakai DM.selectedByQuarter[S.quarter] sebagai sumber (bukan S.budSel)
-  // — BC tab read-only, konflik ngikut keputusan di DM
-  const dmSel = DM.selectedByQuarter[S.quarter || QUARTERS[0]] || new Set();
+  // Pakai S.budSel (checkbox Budget tab) sebagai sumber active plan.
+  // Logic: kalau user uncheck compound di Budget tab, dia exclude dari plan
+  // aktif quarter ini → no conflict. Compound tetep di DM (watchlist/tentatif/
+  // deal) untuk reference, tapi conflict alert ngikut checkbox.
+  // Drop dari DM otomatis remove dari S.budSel via auto-prune di pBudget().
+  const active = S.budSel || new Set();
   return REDUNDANCY.map(r=>({
     ...r,
-    active: r.cmps.filter(c => dmSel.has(c)),
-    triggered: r.cmps.filter(c => dmSel.has(c)).length >= r.thresh
+    active: r.cmps.filter(c => active.has(c)),
+    triggered: r.cmps.filter(c => active.has(c)).length >= r.thresh
   }));
 }
 
