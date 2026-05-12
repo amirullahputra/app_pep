@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=36';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=36';
-import { compoundFromDB } from './models.js?v=36';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=37';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=37';
+import { compoundFromDB } from './models.js?v=37';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -496,6 +496,10 @@ export function setupAuthListener(){
     const user = session?.user || null;
     S.user = user;
     updateAuthUI(user);
+
+    // Auto-close login modal on successful sign-in (single source of truth,
+    // tahan terhadap timing/hang di doLogin yang bisa skip closeAuthModal).
+    if(user) closeAuthModal();
 
     if(!user){
       Object.keys(customDoses).forEach(k=>delete customDoses[k]);
