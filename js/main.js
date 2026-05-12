@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=46';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=47';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=46';
-import * as stateModule from './state.js?v=46';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=46';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=47';
+import * as stateModule from './state.js?v=47';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=47';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=46';
+} from './supabase.js?v=47';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=46';
-import * as panelFns from './panels.js?v=46';
-import * as supaFns from './supabase.js?v=46';
+} from './panels.js?v=47';
+import * as panelFns from './panels.js?v=47';
+import * as supaFns from './supabase.js?v=47';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -67,8 +67,8 @@ function renderQuarterRow(){
   // Fix 4 visible quarter cards: first year of protocol (Q3 2026 - Q2 2027)
   const VISIBLE_QIDS = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
 
-  // Compute stats untuk SEMUA quarter (untuk grand total akurat)
-  const allStats = QUARTERS.map(qid => {
+  // Compute stats per quarter (scope ke yang visible aja untuk grand total)
+  const allStats = VISIBLE_QIDS.map(qid => {
     const selected = DM.selectedByQuarter[qid] || new Set();
     const weeks = weeksInQuarter(qid);
     let totalCost = 0, totalVials = 0;
@@ -82,22 +82,24 @@ function renderQuarterRow(){
     return { qid, selected, weeks, totalCost, totalVials };
   });
 
-  // Grand total (semua 12 quarters)
+  // Grand total = sum dari 4 visible quarters (Q3 2026 - Q2 2027)
   const grandTotal = allStats.reduce((a,q) => a + q.totalCost, 0);
   const grandCompounds = new Set(allStats.flatMap(q => [...q.selected])).size;
   const grandVials = allStats.reduce((a,q) => a + q.totalVials, 0);
   const grandWeeks = allStats.reduce((a,q) => a + q.weeks.length, 0);
+  const activeQ = allStats.filter(q=>q.selected.size>0).length;
 
-  const allCardClass = S.viewAll ? 'ph-card sel-all sel-all-active' : 'ph-card sel-all';
+  // Default state: card biasa (no blue). Aktif (viewAll=true): biru highlighted.
+  const allCardClass = S.viewAll ? 'ph-card sel-all-active' : 'ph-card';
   const allCard = `<div class="${allCardClass}" style="cursor:pointer" onclick="setViewAll(true)">
-    <div class="ph-tag" style="color:var(--acc)">
-      <div class="ph-dot" style="background:var(--acc)"></div>
-      GRAND TOTAL · ${QUARTERS.length}Q ${S.viewAll?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
+    <div class="ph-tag" style="color:${S.viewAll?'var(--acc)':'var(--t3)'}">
+      <div class="ph-dot" style="background:${S.viewAll?'var(--acc)':'var(--t3)'}"></div>
+      GRAND TOTAL · ${allStats.length}Q ${S.viewAll?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
     </div>
     <div class="ph-name">Multi-Quarter Overview</div>
-    <div class="ph-desc">${grandCompounds} compounds · ${grandWeeks} minggu · ${allStats.filter(q=>q.selected.size>0).length}/${QUARTERS.length} active</div>
+    <div class="ph-desc">${grandCompounds} compounds · ${grandWeeks} minggu · ${activeQ}/${allStats.length} active</div>
     <div class="ph-grid" style="grid-template-columns:1fr 1fr">
-      <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:var(--acc);font-size:18px">${rpM(grandTotal)}</div></div>
+      <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:${S.viewAll?'var(--acc)':'var(--t1)'};font-size:18px">${rpM(grandTotal)}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Compounds</div><div class="ph-stat-v">${grandCompounds}</div></div>
       <div class="ph-stat"><div class="ph-stat-l">Total Vials</div><div class="ph-stat-v">${grandVials}</div></div>
     </div>
