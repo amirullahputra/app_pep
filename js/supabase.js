@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=32';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=32';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=33';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=33';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -29,8 +29,6 @@ async function restFetch(table, query=''){
 // sort_order semua di-DROP. Dose schedule akan input manual via Timeline tab
 // (separate future session). Budget/Vial otomatis kosong sampai dose di-input.
 let _pepLoaded = false;
-let _quartersLoaded = false;
-let _quartersCache = null;
 
 // Explicit columns matching 14-col schema v2. Avoid `select=*` supaya
 // safe kalau ada kolom historikal slip masuk lagi (kita pakai DROP IF EXISTS).
@@ -106,22 +104,11 @@ export async function saveCompoundEdit(name, updates){
   _pepLoaded = false;
 }
 
-export async function loadQuartersFromDB(){
-  if(_quartersLoaded)return _quartersCache||[];
-  // Plain fetch() bypass supa client (sama alasan dengan loadAllPepData)
-  try {
-    _quartersCache = await restFetch('quarters',
-      'select=quarter_id,phase_type,window_raw,total_weeks,bb_start,bb_end,bf_start,bf_end&order=quarter_id.asc');
-  } catch(e){
-    console.error('[db] loadQuartersFromDB:', e);
-    throw e;
-  }
-  _quartersLoaded=true;
-  console.info(`[db] Loaded ${_quartersCache.length} quarters`);
-  return _quartersCache;
-}
+// loadQuartersFromDB removed: 'quarters' table dropped pasca DB consolidation.
+// Quarter list dipakai via static QUARTERS array di state.js (12 quarter Q1_2026..Q4_2028).
+// Kalau butuh metadata quarter (bb/bf targets, dates), fetch dari master_timeline.
 
-// ── DECISION MATRIX STAGES (per-quarter, per-user) ──
+//── DECISION MATRIX STAGES (per-quarter, per-user) ──
 // Table: decision_matrix_stages(id, user_id, quarter_id, compound_name, stage, sort_order, ...)
 // RLS: auth.uid() = user_id (FOR ALL TO authenticated)
 

@@ -21,15 +21,15 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=32';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=33';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=32';
-import * as stateModule from './state.js?v=32';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=32';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=33';
+import * as stateModule from './state.js?v=33';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=33';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
-  loadAllPepData, loadQuartersFromDB, saveCompoundEdit,
+  loadAllPepData, saveCompoundEdit,
   openDoseEdit, closeDoseModal, confirmDoseEdit, resetDoseEdit,
   openInvEdit, closeInvModal, confirmInvEdit,
   openReconModal, closeReconModal, confirmReconAdd, deleteReconVial,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=32';
+} from './supabase.js?v=33';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=32';
-import * as panelFns from './panels.js?v=32';
-import * as supaFns from './supabase.js?v=32';
+} from './panels.js?v=33';
+import * as panelFns from './panels.js?v=33';
+import * as supaFns from './supabase.js?v=33';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -437,7 +437,6 @@ window.updateDebugOverlay = updateDebugOverlay;
   const errs = [];
   updateDebugOverlay('init...');
   try { await loadAllPepData(); updateDebugOverlay('pepData ok'); } catch(e){ errs.push('loadAllPepData: '+(e.message||e)); updateDebugOverlay('pepData FAIL'); }
-  try { window._quarters = await loadQuartersFromDB(); } catch(e){ errs.push('loadQuarters: '+(e.message||e)); window._quarters=[]; }
 
   // Setup auth listener AFTER data loaded — prevents race where onAuthStateChange
   // fires during/before loadAllPepData and renderPanels is called with empty PHASES
