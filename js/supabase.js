@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=51';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=51';
-import { compoundFromDB } from './models.js?v=51';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=52';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=52';
+import { compoundFromDB } from './models.js?v=52';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -462,24 +462,6 @@ export function openReconModal(name){
   // Pre-fill freq dari compound default (user bisa override)
   const _cDef = COMPOUNDS.find(x=>x.name===name);
   document.getElementById('recon-freq-input').value = _cDef?.freqPerWeek || 7;
-
-  // Render protocol info dari compound (read-only)
-  const c = COMPOUNDS.find(x => x.name === name);
-  const protoEl = document.getElementById('recon-protocol-info');
-  if(c && protoEl){
-    const wkDose  = c.weeklyDoseValue ? `${c.weeklyDoseValue} ${c.weeklyDoseUnit||'mg'}/wk` : '—';
-    const perInj  = c.perInjectValue  ? `${c.perInjectValue} ${c.weeklyDoseUnit||'mg'}` : '—';
-    const freq    = c.freqPerWeek     ? `${c.freqPerWeek}×/minggu` : '—';
-    const vialSz  = c.vialSize ? `${c.vialSize} ${c.vialUnit||'mg'}/vial` : '—';
-    protoEl.innerHTML = `
-      <div style="font-size:10px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Protocol</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
-        <div><span style="color:var(--t3)">Vial:</span> <b style="color:var(--t0)">${vialSz}</b></div>
-        <div><span style="color:var(--t3)">Per inject:</span> <b style="color:var(--t0)">${perInj}</b></div>
-        <div><span style="color:var(--t3)">Frequency:</span> <b style="color:var(--t0)">${freq}</b></div>
-        <div><span style="color:var(--t3)">Weekly:</span> <b style="color:var(--t0)">${wkDose}</b></div>
-      </div>`;
-  }
 
   // Render existing recon entries
   const entries=reconCache[name]||[];

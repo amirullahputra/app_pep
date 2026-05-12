@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=51';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=52';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=51';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=51';
+} from './state.js?v=52';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=52';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=51';
+import * as stateModule from './state.js?v=52';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -714,9 +714,6 @@ export function pVial(){
       <div class="modal-title" id="recon-modal-title">Rekonstituasi Vial</div>
       <div class="modal-sub">Catat vial yang sudah direkonstituasi + kalibrasi IU syringe.</div>
       <input type="hidden" id="recon-modal-name">
-
-      <!-- Protocol info (read-only, auto dari compound) -->
-      <div id="recon-protocol-info" style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r2);padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--t2)"></div>
 
       <!-- Existing recon history -->
       <div id="recon-existing" style="margin-bottom:14px;max-height:160px;overflow-y:auto"></div>
