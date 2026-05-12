@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=40';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=40';
-import { compoundFromDB } from './models.js?v=40';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=41';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=41';
+import { compoundFromDB } from './models.js?v=41';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -22,6 +22,31 @@ async function restFetch(table, query=''){
     throw new Error(`${table}: HTTP ${res.status} ${body.slice(0,200)}`);
   }
   return res.json();
+}
+
+// ── Authenticated REST (untuk RLS-protected user tables) ──
+// Pakai JWT dari supa.auth session — kalau supa.from() hang karena
+// GoTrueClient navigator.locks, plain fetch dengan Authorization: Bearer
+// tetap jalan. URL params PostgREST style (eq.user_id, order, dst).
+async function authFetch(table, query='', opts={}){
+  const { data: { session } } = await supa.auth.getSession();
+  const jwt = session?.access_token;
+  if(!jwt) throw new Error(`${table}: no auth session`);
+  const url = `${SUPA_URL}/rest/v1/${table}${query?'?'+query:''}`;
+  const headers = {
+    apikey: SUPA_KEY,
+    Authorization: `Bearer ${jwt}`,
+    'Content-Type': 'application/json',
+    ...(opts.headers || {})
+  };
+  const res = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body });
+  if(!res.ok){
+    const body = await res.text().catch(()=>'');
+    throw new Error(`${table}: HTTP ${res.status} ${body.slice(0,200)}`);
+  }
+  if(res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ── DYNAMIC PEP DATA LOAD (compounds + redundancy_rules) ──
@@ -100,8 +125,11 @@ export async function loadAllPepData(){
 
 export async function saveCompoundEdit(name, updates){
   // updates: object with any fields to update on compounds row
-  const { error } = await supa.from('compounds').update(updates).eq('name', name);
-  if(error){ console.error('saveCompoundEdit:', error); throw error; }
+  await authFetch('compounds', `name=eq.${encodeURIComponent(name)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify(updates)
+  });
   // Force reload on next call
   _pepLoaded = false;
 }
@@ -115,13 +143,12 @@ export async function saveCompoundEdit(name, updates){
 // RLS: auth.uid() = user_id (FOR ALL TO authenticated)
 
 // Load semua selection user, group by quarter_id → { 'Q3_2026': Map<name, stage>, ... }
+// Pakai authFetch (plain fetch + JWT) untuk bypass supa client hang.
 export async function loadDMStages(userId){
   const empty = Object.fromEntries(QUARTERS.map(q => [q, new Map()]));
   if(!userId) return empty;
-  const { data, error } = await supa.from('decision_matrix_stages')
-    .select('quarter_id, compound_name, stage, sort_order')
-    .eq('user_id', userId);
-  if(error){ console.error('loadDMStages:', error); throw error; }
+  const data = await authFetch('decision_matrix_stages',
+    `select=quarter_id,compound_name,stage,sort_order&user_id=eq.${userId}`);
   const out = { ...empty };
   (data||[]).forEach(r => {
     if(!out[r.quarter_id]) out[r.quarter_id] = new Map();
@@ -134,43 +161,43 @@ export async function loadDMStages(userId){
 export async function setDMStage(userId, quarterId, compoundName, stage){
   if(!userId) throw new Error('Login dulu');
   const row = {
-    user_id: userId,
-    quarter_id: quarterId,
-    compound_name: compoundName,
-    stage,
+    user_id: userId, quarter_id: quarterId, compound_name: compoundName, stage,
     updated_at: new Date().toISOString()
   };
-  const { error } = await supa.from('decision_matrix_stages')
-    .upsert(row, { onConflict: 'user_id,quarter_id,compound_name' });
-  if(error){ console.error('setDMStage:', error); throw error; }
+  await authFetch('decision_matrix_stages', '', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(row)
+  });
 }
 
 // Remove
 export async function removeDMStage(userId, quarterId, compoundName){
   if(!userId) throw new Error('Login dulu');
-  const { error } = await supa.from('decision_matrix_stages')
-    .delete()
-    .eq('user_id', userId).eq('quarter_id', quarterId).eq('compound_name', compoundName);
-  if(error){ console.error('removeDMStage:', error); throw error; }
+  await authFetch('decision_matrix_stages',
+    `user_id=eq.${userId}&quarter_id=eq.${quarterId}&compound_name=eq.${encodeURIComponent(compoundName)}`,
+    { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
 }
 
 // Bulk seed (sport >=60 → 'deal')
 export async function seedDMStages(userId, quarterId, rows){
   if(!userId || !rows?.length) return { inserted: [] };
   const payload = rows.map((r,i) => ({
-    user_id: userId,
-    quarter_id: quarterId,
-    compound_name: r.compound_name,
-    stage: r.stage,
+    user_id: userId, quarter_id: quarterId,
+    compound_name: r.compound_name, stage: r.stage,
     sort_order: r.sort_order ?? (100+i)
   }));
-  const { data, error } = await supa.from('decision_matrix_stages')
-    .upsert(payload, { onConflict: 'user_id,quarter_id,compound_name', ignoreDuplicates: true })
-    .select();
-  if(error && error.code !== '23505'){
-    console.error('seedDMStages:', error); throw error;
+  try {
+    const data = await authFetch('decision_matrix_stages', '', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+      body: JSON.stringify(payload)
+    });
+    return { inserted: data || [] };
+  } catch(e){
+    if(String(e.message).includes('23505')) return { inserted: [] };
+    console.error('seedDMStages:', e); throw e;
   }
-  return { inserted: data || [] };
 }
 
 // ── SAVE INDICATOR ──
@@ -182,66 +209,60 @@ export function showSaveInd(){
 
 // ── BUDGET DB (per-quarter) ──
 export async function loadBudgetFromDB(qid){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){initBudSel(qid);return;}
-  const{data}=await supa.from('budget_selections')
-    .select('selected_compounds,budget_cap')
-    .eq('user_id',user.id).eq('quarter_id',qid).maybeSingle();
-  if(data){
-    S.budSel=new Set(data.selected_compounds||[]);
-    if(data.budget_cap)S.budCap=data.budget_cap;
+  if(!S.user){initBudSel(qid);return;}
+  const data = await authFetch('budget_selections',
+    `select=selected_compounds,budget_cap&user_id=eq.${S.user.id}&quarter_id=eq.${qid}`);
+  const row = data?.[0];
+  if(row){
+    S.budSel=new Set(row.selected_compounds||[]);
+    if(row.budget_cap)S.budCap=row.budget_cap;
   }else{
     initBudSel(qid);
   }
 }
 
 export async function saveBudgetToDB(){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user)return;
-  await supa.from('budget_selections').upsert({
-    user_id:user.id,
-    quarter_id:S.budQuarter,
-    selected_compounds:[...S.budSel],
-    budget_cap:S.budCap,
-    updated_at:new Date().toISOString()
-  },{onConflict:'user_id,quarter_id'});
+  if(!S.user)return;
+  await authFetch('budget_selections', '', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      user_id: S.user.id, quarter_id: S.budQuarter,
+      selected_compounds: [...S.budSel], budget_cap: S.budCap,
+      updated_at: new Date().toISOString()
+    })
+  });
   showSaveInd();
 }
 
 // ── CUSTOM DOSES ──
 export async function loadCustomDoses(){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){
-    // clear customDoses
-    Object.keys(customDoses).forEach(k=>delete customDoses[k]);
-    return;
-  }
-  const{data}=await supa.from('custom_doses')
-    .select('compound_name,week,dose')
-    .eq('user_id',user.id);
-  // clear and repopulate
+  if(!S.user){ Object.keys(customDoses).forEach(k=>delete customDoses[k]); return; }
+  const data = await authFetch('custom_doses',
+    `select=compound_name,week,dose&user_id=eq.${S.user.id}`);
   Object.keys(customDoses).forEach(k=>delete customDoses[k]);
-  if(data){
-    data.forEach(r=>{
-      if(!customDoses[r.compound_name])customDoses[r.compound_name]={};
-      customDoses[r.compound_name][r.week]=r.dose;
-    });
-  }
+  (data||[]).forEach(r=>{
+    if(!customDoses[r.compound_name])customDoses[r.compound_name]={};
+    customDoses[r.compound_name][r.week]=r.dose;
+  });
 }
 
 export async function saveCustomDose(compoundName,week,dose){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){alert('Login dulu untuk simpan custom dose!');return;}
-
+  if(!S.user){alert('Login dulu untuk simpan custom dose!');return;}
   if(dose===null){
-    await supa.from('custom_doses').delete()
-      .eq('user_id',user.id).eq('compound_name',compoundName).eq('week',week);
+    await authFetch('custom_doses',
+      `user_id=eq.${S.user.id}&compound_name=eq.${encodeURIComponent(compoundName)}&week=eq.${week}`,
+      { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     if(customDoses[compoundName])delete customDoses[compoundName][week];
   }else{
-    await supa.from('custom_doses').upsert({
-      user_id:user.id,compound_name:compoundName,week,dose,
-      updated_at:new Date().toISOString()
-    },{onConflict:'user_id,compound_name,week'});
+    await authFetch('custom_doses', '', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        user_id:S.user.id, compound_name:compoundName, week, dose,
+        updated_at:new Date().toISOString()
+      })
+    });
     if(!customDoses[compoundName])customDoses[compoundName]={};
     customDoses[compoundName][week]=dose;
   }
@@ -291,22 +312,21 @@ export async function resetDoseEdit(){
 
 // ── INVENTORY ──
 export async function loadInventory(){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){
+  if(!S.user){
     Object.keys(inventoryCache).forEach(k=>delete inventoryCache[k]);
     return;
   }
-  const[invRes,ssRes]=await Promise.all([
-    supa.from('inventory').select('compound_name,qty_vials').eq('user_id',user.id),
-    supa.from('safety_stock').select('compound_name,min_vials').eq('user_id',user.id)
+  const [inv, ss] = await Promise.all([
+    authFetch('inventory',   `select=compound_name,qty_vials&user_id=eq.${S.user.id}`),
+    authFetch('safety_stock', `select=compound_name,min_vials&user_id=eq.${S.user.id}`)
   ]);
   Object.keys(inventoryCache).forEach(k=>delete inventoryCache[k]);
   COMPOUNDS.forEach(c=>{inventoryCache[c.name]={qty:0,safetyStock:5};});
-  if(invRes.data)invRes.data.forEach(r=>{
+  (inv||[]).forEach(r=>{
     if(!inventoryCache[r.compound_name])inventoryCache[r.compound_name]={qty:0,safetyStock:5};
     inventoryCache[r.compound_name].qty=r.qty_vials;
   });
-  if(ssRes.data)ssRes.data.forEach(r=>{
+  (ss||[]).forEach(r=>{
     if(!inventoryCache[r.compound_name])inventoryCache[r.compound_name]={qty:0,safetyStock:5};
     inventoryCache[r.compound_name].safetyStock=r.min_vials;
   });
@@ -328,14 +348,14 @@ export async function confirmInvEdit(){
   const qty=parseInt(document.getElementById('inv-qty-input').value)||0;
   const ss=parseInt(document.getElementById('inv-ss-input').value)||0;
   closeInvModal();
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){alert('Login dulu untuk simpan inventory.');return;}
+  if(!S.user){alert('Login dulu untuk simpan inventory.');return;}
   if(!inventoryCache[name])inventoryCache[name]={qty:0,safetyStock:5};
   inventoryCache[name].qty=qty;
   inventoryCache[name].safetyStock=ss;
+  const upsertOpts = { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'} };
   await Promise.all([
-    supa.from('inventory').upsert({user_id:user.id,compound_name:name,qty_vials:qty,last_updated:new Date().toISOString()},{onConflict:'user_id,compound_name'}),
-    supa.from('safety_stock').upsert({user_id:user.id,compound_name:name,min_vials:ss},{onConflict:'user_id,compound_name'})
+    authFetch('inventory', '', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,qty_vials:qty,last_updated:new Date().toISOString()}) }),
+    authFetch('safety_stock', '', { ...upsertOpts, body: JSON.stringify({user_id:S.user.id,compound_name:name,min_vials:ss}) })
   ]);
   showSaveInd();
   window.renderPanels();
@@ -343,15 +363,11 @@ export async function confirmInvEdit(){
 
 // ── RECONSTITUTED VIALS ──
 export async function loadReconVials(){
-  const{data:{user}}=await supa.auth.getUser();
   Object.keys(reconCache).forEach(k=>delete reconCache[k]);
-  if(!user)return;
-  const{data}=await supa.from('reconstituted_vials')
-    .select('id,compound_name,qty_vials,reconstituted_at,notes')
-    .eq('user_id',user.id)
-    .order('reconstituted_at',{ascending:false});
-  if(!data)return;
-  data.forEach(r=>{
+  if(!S.user)return;
+  const data = await authFetch('reconstituted_vials',
+    `select=id,compound_name,qty_vials,reconstituted_at,notes&user_id=eq.${S.user.id}&order=reconstituted_at.desc`);
+  (data||[]).forEach(r=>{
     const sl=SHELF_LIFE[r.compound_name];
     const reconDate=new Date(r.reconstituted_at);
     const shelfDays=sl?.shelf||30;
@@ -369,31 +385,35 @@ export async function loadReconVials(){
 }
 
 export async function addReconVial(compoundName, qty, reconDateStr, notes){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user){alert('Login dulu!');return;}
-  const{data,error}=await supa.from('reconstituted_vials').insert({
-    user_id:user.id,
-    compound_name:compoundName,
-    qty_vials:qty,
-    reconstituted_at:reconDateStr,
-    notes:notes||null
-  }).select().single();
-  if(error){alert('Gagal simpan: '+error.message);return;}
+  if(!S.user){alert('Login dulu!');return;}
+  let data;
+  try {
+    data = await authFetch('reconstituted_vials', '', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        user_id: S.user.id, compound_name: compoundName,
+        qty_vials: qty, reconstituted_at: reconDateStr, notes: notes || null
+      })
+    });
+  } catch(e){ alert('Gagal simpan: '+(e.message||e)); return; }
+  const row = Array.isArray(data) ? data[0] : data;
   const sl=SHELF_LIFE[compoundName];
   const reconDate=new Date(reconDateStr);
   const shelfDays=sl?.shelf||30;
   const expiredAt=new Date(reconDate);
   expiredAt.setDate(expiredAt.getDate()+shelfDays);
   if(!reconCache[compoundName])reconCache[compoundName]=[];
-  reconCache[compoundName].unshift({id:data.id,qty,reconDate,expiredAt,notes:notes||''});
+  reconCache[compoundName].unshift({id:row.id,qty,reconDate,expiredAt,notes:notes||''});
   showSaveInd();
   window.renderPanels();
 }
 
 export async function deleteReconVial(id, compoundName){
-  const{data:{user}}=await supa.auth.getUser();
-  if(!user)return;
-  await supa.from('reconstituted_vials').delete().eq('id',id).eq('user_id',user.id);
+  if(!S.user)return;
+  await authFetch('reconstituted_vials',
+    `id=eq.${id}&user_id=eq.${S.user.id}`,
+    { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
   if(reconCache[compoundName]){
     reconCache[compoundName]=reconCache[compoundName].filter(r=>r.id!==id);
   }
