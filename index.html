@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Peptide Master FATLOSS</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧬%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=42">
+<link rel="stylesheet" href="css/style.css?v=43">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -97,18 +98,17 @@
 
 <!-- AUTH MODAL -->
 <div class="modal-overlay" id="auth-modal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeAuthModal()">✕</button>
+  <form class="modal-box" onsubmit="event.preventDefault();doLogin()">
+    <button type="button" class="modal-close" onclick="closeAuthModal()">✕</button>
     <div class="modal-title">Masuk</div>
     <div class="modal-sub">Masukkan email dan password kamu</div>
     <input class="modal-input" type="email" id="auth-user" placeholder="Email" autocomplete="email">
-    <input class="modal-input" type="password" id="auth-pass" placeholder="Password..." autocomplete="current-password"
-      onkeydown="if(event.key==='Enter')doLogin()">
+    <input class="modal-input" type="password" id="auth-pass" placeholder="Password..." autocomplete="current-password">
     <div class="modal-err" id="auth-err"></div>
     <div class="modal-row">
-      <button class="modal-btn primary" onclick="doLogin()">🔑 Login</button>
+      <button type="submit" class="modal-btn primary">🔑 Login</button>
     </div>
-  </div>
+  </form>
 </div>
 
 <!-- TOP BAR -->
@@ -141,9 +141,9 @@
 
 </div><!-- /app -->
 
-<script type="module" src="js/main.js?v=42"></script>
+<script type="module" src="js/main.js?v=43"></script>
 
 <div id="app-debug" style="position:fixed;bottom:18px;right:8px;font-size:10px;color:#444;background:rgba(255,255,255,.85);border:1px solid #ccc;border-radius:4px;padding:3px 8px;font-family:'JetBrains Mono',monospace;z-index:9998;max-width:60vw">starting...</div>
-<div id="app-version" style="position:fixed;bottom:4px;right:8px;font-size:9px;color:#999;opacity:.5;font-family:'JetBrains Mono',monospace;pointer-events:none;z-index:9999">v=42</div>
+<div id="app-version" style="position:fixed;bottom:4px;right:8px;font-size:9px;color:#999;opacity:.5;font-family:'JetBrains Mono',monospace;pointer-events:none;z-index:9999">v=43</div>
 </body>
 </html>
