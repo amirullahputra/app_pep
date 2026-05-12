@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=47';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=48';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=47';
-import * as stateModule from './state.js?v=47';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=47';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=48';
+import * as stateModule from './state.js?v=48';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=48';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=47';
+} from './supabase.js?v=48';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=47';
-import * as panelFns from './panels.js?v=47';
-import * as supaFns from './supabase.js?v=47';
+} from './panels.js?v=48';
+import * as panelFns from './panels.js?v=48';
+import * as supaFns from './supabase.js?v=48';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -377,29 +377,26 @@ function getProtocolTime(){
 }
 
 function renderTimer(){
-  const t=getProtocolTime();
   const el=document.getElementById('topbar-timer');
   if(!el)return;
 
-  if(t.belumMulai){
-    el.innerHTML=`
-      <div style="font-size:10px;font-weight:700;color:var(--t2)">Mulai dalam</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:var(--acc)">${t.days}h ${t.hrs}j ${t.mins}m <span style="color:var(--warn)">${t.secs}d</span></div>`;
-    return;
-  }
+  // Tanggal + jam current (HH:MM), bukan countdown
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('id-ID', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  if(t.done){
-    el.innerHTML=`<div style="font-size:11px;font-weight:800;color:var(--f3)">✅ Selesai</div>`;
-    return;
-  }
+  // Tambahin week info kalau protocol sudah jalan (sebagai context, bukan countdown)
+  const t = getProtocolTime();
+  const ctxLabel = t.belumMulai ? 'Pre-protocol'
+                  : t.done ? '✅ Protocol Selesai'
+                  : `W${t.week} · ${(t.qid||'').replace('_',' ')}`;
 
-  const qLabel = t.qid ? t.qid.replace('_',' ') : '—';
   el.innerHTML=`
-    <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:var(--acc)">W${t.week}</div>
-    <div style="width:1px;height:20px;background:var(--bdr)"></div>
-    <div style="font-size:11px;font-weight:700;color:var(--acc)">${qLabel} · Hari ${t.dayOfWeek}</div>
-    <div style="width:1px;height:20px;background:var(--bdr)"></div>
-    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t2)">${String(t.hrs).padStart(2,'0')}:${String(t.mins).padStart(2,'0')}:<span style="color:var(--warn)">${String(t.secs).padStart(2,'0')}</span></div>`;
+    <div style="font-size:11px;font-weight:700;color:var(--t2)">${dateStr}</div>
+    <div style="width:1px;height:18px;background:var(--bdr)"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:var(--acc)">${timeStr}</div>
+    <div style="width:1px;height:18px;background:var(--bdr)"></div>
+    <div style="font-size:10.5px;font-weight:700;color:var(--t1)">${ctxLabel}</div>`;
 
   if(S.currentWeek!==t.week){S.currentWeek=t.week;renderPanels();}
 }
@@ -446,7 +443,8 @@ window.updateDebugOverlay = updateDebugOverlay;
   // fires during/before loadAllPepData and renderPanels is called with empty PHASES
   try { setupAuthListener(); } catch(e){ errs.push('setupAuthListener: '+(e.message||e)); }
 
-  setInterval(renderTimer,1000);
+  // Update tiap 30 detik cukup (HH:MM display, ga perlu second tick)
+  setInterval(renderTimer, 30000);
   renderTimer();
   try { renderQuarterRow(); } catch(e){ errs.push('renderQuarterRow: '+(e.message||e)); }
   try { renderNav(); } catch(e){ errs.push('renderNav: '+(e.message||e)); }
