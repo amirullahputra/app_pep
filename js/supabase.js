@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=30';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=30';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=32';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=32';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -493,25 +493,42 @@ export async function doLogin(){
 }
 
 // Auth state change listener — set up in main.js after imports
+// Timeout wrapper: kalau supa.from() hang (GoTrueClient lock quirk),
+// individual load gak boleh block render. Default 8 detik.
+function withTimeout(promise, ms, name){
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout ${ms}ms`)), ms))
+  ]).catch(e => { console.warn(`[load] ${name} failed: ${e.message}`); return null; });
+}
+
 export function setupAuthListener(){
   supa.auth.onAuthStateChange(async(event,session)=>{
     const user = session?.user || null;
     S.user = user;
     updateAuthUI(user);
-    if(user){
-      // Use allSettled supaya satu fail nggak block render
-      await Promise.allSettled([
-        loadBudgetFromDB(S.budQuarter),
-        loadCustomDoses(),
-        loadInventory(),
-        loadReconVials(),
-        window.refreshDMStages ? window.refreshDMStages() : Promise.resolve()
-      ]);
-      window.renderPanels();
-    }else{
+
+    if(!user){
       Object.keys(customDoses).forEach(k=>delete customDoses[k]);
       Object.keys(inventoryCache).forEach(k=>delete inventoryCache[k]);
       window.renderPanels();
+      return;
     }
+
+    // Render IMMEDIATELY (logged-in state) — sebelum load DB.
+    // Card data masih kosong, tapi UI udah responsive (button → email,
+    // tab navigation, dst). Avoid "blank stuck" kalau load lambat.
+    window.renderPanels();
+
+    // Load 5 user-specific tables PARALLEL, masing-masing dengan 8s timeout.
+    // Salah satu hang gak block yang lain — render lagi setelah semua selesai/timeout.
+    await Promise.allSettled([
+      withTimeout(loadBudgetFromDB(S.budQuarter), 8000, 'budget'),
+      withTimeout(loadCustomDoses(), 8000, 'customDoses'),
+      withTimeout(loadInventory(), 8000, 'inventory'),
+      withTimeout(loadReconVials(), 8000, 'reconVials'),
+      withTimeout(window.refreshDMStages ? window.refreshDMStages() : Promise.resolve(), 8000, 'DM')
+    ]);
+    window.renderPanels();
   });
 }
