@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=52';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=53';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=52';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=52';
+} from './state.js?v=53';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=53';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=52';
+import * as stateModule from './state.js?v=53';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -617,17 +617,23 @@ export function pVial(){
       </td>
       <td class="c" style="vertical-align:top;padding-top:10px">
         ${(()=>{
-          if(!c.vialSize||!c.weeklyDoseValue){return `<div style="font-size:10px;color:var(--t3)">—</div>`;}
+          if(!c.vialSize){return `<div style="font-size:10px;color:var(--t3)">—</div>`;}
           const latest=reconList[0];
           const vol=latest?.volumeMl||2;
           const syr=latest?.syringeScaleIu||100;
           const freq=latest?.freqPerWeek||c.freqPerWeek||0;
           if(!freq)return `<div style="font-size:10px;color:var(--t3)">isi freq</div>`;
-          let weeklyVU=c.weeklyDoseValue;
-          if(c.weeklyDoseUnit&&c.vialUnit&&c.weeklyDoseUnit!==c.vialUnit){
-            if(c.vialUnit==='mg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg;
-            else if(c.vialUnit==='mcg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg*1000;
+          // Weekly dose dari Timeline (customDoses) per S.currentWeek
+          const curW=S.currentWeek||1;
+          let weeklyVU=tlDoseForWeek(curW,c,S.quarter)||0;
+          if(!weeklyVU){
+            weeklyVU=c.weeklyDoseValue||0;
+            if(c.weeklyDoseUnit&&c.vialUnit&&c.weeklyDoseUnit!==c.vialUnit){
+              if(c.vialUnit==='mg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg;
+              else if(c.vialUnit==='mcg'&&c.weeklyDoseMg)weeklyVU=c.weeklyDoseMg*1000;
+            }
           }
+          if(!weeklyVU)return `<div style="font-size:10px;color:var(--t3)">no dose</div>`;
           const perInjVU=weeklyVU/freq;
           const conc=c.vialSize/vol;
           const volPI=conc>0?perInjVU/conc:0;
@@ -635,7 +641,7 @@ export function pVial(){
           if(!iu)return `<div style="font-size:10px;color:var(--t3)">—</div>`;
           const label=latest?`${vol}ml · ${syr}IU`:`default 2ml · 100`;
           return `<div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:#7c3aed">${iu.toFixed(iu<10?1:0)} <span style="font-size:10px">IU</span></div>
-            <div style="font-size:9px;color:var(--t3);font-weight:700">${label}</div>`;
+            <div style="font-size:9px;color:var(--t3);font-weight:700">${label} · wk${curW}</div>`;
         })()}
       </td>
       <td class="c" style="vertical-align:top;padding-top:10px">

@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=52';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=52';
-import { compoundFromDB } from './models.js?v=52';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=53';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=53';
+import { compoundFromDB } from './models.js?v=53';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -510,11 +510,18 @@ export function recalcReconIU(){
   // Konsentrasi dalam vial_unit/ml (mg/ml atau mcg/ml)
   const conc = c.vialSize / volume;  // e.g. 10mg / 2ml = 5 mg/ml
 
-  // Weekly dose dalam vial_unit
-  let weeklyInVU = c.weeklyDoseValue || 0;
-  if(c.weeklyDoseUnit && c.vialUnit && c.weeklyDoseUnit !== c.vialUnit){
-    if(c.vialUnit === 'mg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg;
-    else if(c.vialUnit === 'mcg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg * 1000;
+  // Weekly dose dalam vial_unit — pull dari Timeline (customDoses) per S.currentWeek.
+  // tlDoseForWeek priority: customDoses[name][week] > cycle override > compound.weeklyDoseValue.
+  // Kalau user edit dose di Timeline tab, otomatis ke-reflect di sini.
+  const curWeek = S.currentWeek || 1;
+  let weeklyInVU = tlDoseForWeek(curWeek, c, S.quarter) || 0;
+  // Fallback final kalau Timeline 0/off-cycle: pakai canonical static
+  if(!weeklyInVU){
+    weeklyInVU = c.weeklyDoseValue || 0;
+    if(c.weeklyDoseUnit && c.vialUnit && c.weeklyDoseUnit !== c.vialUnit){
+      if(c.vialUnit === 'mg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg;
+      else if(c.vialUnit === 'mcg' && c.weeklyDoseMg) weeklyInVU = c.weeklyDoseMg * 1000;
+    }
   }
 
   // Per inject = weekly / freq (USER nentuin freq, bukan compound profile)
