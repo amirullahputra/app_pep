@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=33';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=33';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=34';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=34';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -36,8 +36,7 @@ const COMPOUND_COLS = [
   'id','created_at','name','category','mechanism','risk_text','hiv_notes',
   'notes','vial_unit','shelf_life_days','vial_size','vial_price_idr',
   'vial_label','timing_note',
-  'on_cycle','off_cycle','weekly_total',
-  'efficiency_score'
+  'on_cycle','off_cycle','weekly_total','efficiency_score'
 ].join(',');
 
 const EMPTY_COST = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };

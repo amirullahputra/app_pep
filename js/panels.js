@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=33';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=34';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=33';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=33';
+} from './state.js?v=34';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=34';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=33';
+import * as stateModule from './state.js?v=34';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
