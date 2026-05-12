@@ -1,8 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=34';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, doseInVialUnit } from './state.js?v=34';
+import { _setPepData, COMPOUNDS, VSPECS } from './data.js?v=35';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=35';
+import { compoundFromDB } from './models.js?v=35';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -30,13 +31,16 @@ async function restFetch(table, query=''){
 // (separate future session). Budget/Vial otomatis kosong sampai dose di-input.
 let _pepLoaded = false;
 
-// Explicit columns matching 14-col schema v2. Avoid `select=*` supaya
-// safe kalau ada kolom historikal slip masuk lagi (kita pakai DROP IF EXISTS).
+// Explicit columns matching schema v2 structured (no text parsing di frontend).
+// Adapter compoundFromDB() map ke canonical camelCase shape.
 const COMPOUND_COLS = [
-  'id','created_at','name','category','mechanism','risk_text','hiv_notes',
-  'notes','vial_unit','shelf_life_days','vial_size','vial_price_idr',
-  'vial_label','timing_note',
-  'on_cycle','off_cycle','weekly_total','efficiency_score'
+  'id','name','category',
+  'mechanism','risk_text','hiv_notes','notes','timing_note',
+  'vial_unit','vial_size','vial_price_idr','vial_label','shelf_life_days',
+  'cycle_on_weeks','cycle_off_weeks','cycle_type',
+  'weekly_dose_value','weekly_dose_unit','weekly_dose_mg',
+  'per_inject_value','per_inject_mg','freq_per_week',
+  'efficiency_score','created_at'
 ].join(',');
 
 const EMPTY_COST = { f1:{mg:0,v:0,cost:0}, f2:{mg:0,v:0,cost:0}, f3:{mg:0,v:0,cost:0}, tot:{mg:0,v:0,cost:0} };
@@ -60,29 +64,28 @@ export async function loadAllPepData(){
     throw e;
   }
 
-  // Build derived structures. SC/SP/dose schedule (d) di-stub kosong
-  // karena kolom-kolom itu sudah di-DROP dari schema. App tetap tidak crash
-  // (costForQuarter return 0, sport dots dan score render 0/blank).
+  // Build derived structures via canonical Compound adapter.
+  // SC/SP stub zeros (sport_profiles + phase_costs tables di-drop, scoring
+  // dipindah ke compounds.efficiency_score sebagai single signal).
   const SC={}, SP={}, MECHS={}, VSPECS={}, SHELF_LIFE={};
-  const COMPOUNDS = [];
-  compoundRows.forEach(r => {
-    SC[r.name] = { f1:{r:0,p:0}, f2:{r:0,p:0}, f3:{r:0,p:0} };
-    SP[r.name] = { z2:0, pw:0, rc:0, hr:0, cn:0, risk: r.risk_text || '' };
-    MECHS[r.name] = r.mechanism || '';
-    VSPECS[r.name] = {
-      unit:r.vial_unit||'mg', vSize:r.vial_size||10,
-      vPrice:r.vial_price_idr||0, label:r.vial_label||''
+  const COMPOUNDS = compoundRows.map(r => {
+    const c = compoundFromDB(r);
+    // Side-objects untuk legacy code path (akan di-collapse ke canonical later)
+    SC[c.name] = { f1:{r:0,p:0}, f2:{r:0,p:0}, f3:{r:0,p:0} };
+    SP[c.name] = { z2:0, pw:0, rc:0, hr:0, cn:0, risk: c.riskText };
+    MECHS[c.name] = c.mechanism;
+    VSPECS[c.name] = {
+      unit: c.vialUnit, vSize: c.vialSize,
+      vPrice: c.vialPriceIdr, label: c.vialLabel
     };
-    SHELF_LIFE[r.name] = { shelf:r.shelf_life_days, timing:r.timing_note||'' };
-
-    COMPOUNDS.push({
-      name:r.name, cat:r.category||'off',
-      hiv_notes:r.hiv_notes, notes:r.notes,
-      on_cycle:r.on_cycle, off_cycle:r.off_cycle, weekly_total:r.weekly_total,
-      efficiency_score: r.efficiency_score || 0,
-      d: {},               // doses_jsonb dropped — Timeline tab will input manual nanti
-      c: EMPTY_COST,       // costs always zero until dose schedule available
-    });
+    SHELF_LIFE[c.name] = { shelf: c.shelfLifeDays, timing: c.timingNote };
+    // Compound itself: canonical shape + legacy aliases (cat for data.js compat, d/c stubs)
+    return {
+      ...c,
+      cat: c.category,        // legacy alias dipakai di panels.js filter
+      d: {},                  // doses_jsonb dropped — Timeline tab input manual
+      c: EMPTY_COST           // cost stub
+    };
   });
 
   const REDUNDANCY = ruleRows.map(r => ({
@@ -251,7 +254,7 @@ let _doseEditTarget={name:'',week:0,defaultDose:0,unit:''};
 
 export function openDoseEdit(compoundName,week){
   const c=COMPOUNDS.find(x=>x.name===compoundName);
-  // Auto default: pakai tlDoseForWeek (handles cycle override + master weekly_total + unit conv).
+  // Auto default: pakai tlDoseForWeek (handles cycle override + weeklyDoseValue + unit conv).
   // Output sudah dalam vial_unit, jadi user edit dalam vial_unit yang konsisten.
   let defaultDose = c?.d?.[week] || 0;
   if(!defaultDose && c){

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=34';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=35';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -10,13 +10,13 @@ import {
   vialsConsumedRange, weeksUntilEmpty, invStatus,
   _lastSuggested,
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
-  parseCycleText, parseWeeklyTotal, tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
+  tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=34';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=34';
+} from './state.js?v=35';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=35';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=34';
+import * as stateModule from './state.js?v=35';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -61,7 +61,7 @@ export function pOverview(){
       ...c,
       dose: tlDoseForWeek(cw, c, cwQuarterAct),
       unit: VSPECS[c.name]?.unit || 'mg',
-      eff: c.efficiency_score || 0
+      eff: c.efficiencyScore || 0
     }))
     .sort((a,b) => b.eff - a.eff);
 
@@ -116,10 +116,10 @@ export function pOverview(){
       <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--t1);flex-shrink:0;min-width:68px;text-align:right">${rpM(v)}</div>
     </div>`).join('') || '<div style="color:var(--t3);font-size:11px;padding:10px 0">Belum ada compound dipilih di Decision Matrix untuk quarter ini</div>';
 
-  // Compound list aktif di quarter (sorted by efficiency_score)
+  // Compound list aktif di quarter (sorted by efficiencyScore)
   const quarterActive = [...COMPOUNDS]
     .filter(c => dealt.has(c.name))
-    .map(c => ({ ...c, eff: c.efficiency_score || 0 }))
+    .map(c => ({ ...c, eff: c.efficiencyScore || 0 }))
     .sort((a,b) => b.eff - a.eff);
   const maxEff = Math.max(...quarterActive.map(c => c.eff), 1);
 
@@ -775,16 +775,21 @@ export function pTimeline(){
 
   const rows = yCompounds.map(c => {
     const cycle = tlGetCycle(qid, c.name);
-    const vialUnit = VSPECS[c.name]?.unit || 'mg';
-    // Master weekly_total converted to vial_unit (for placeholder)
-    const wt = parseWeeklyTotal(c.weekly_total);
-    const masterDoseInVU = wt?.value ? doseInVialUnit(wt.value, wt.unit, vialUnit) : 0;
+    const vialUnit = c.vialUnit || VSPECS[c.name]?.unit || 'mg';
+    // Master weekly dose dalam vial_unit (placeholder display)
+    let masterDoseInVU = 0;
+    if(c.weeklyDoseValue){
+      if(c.weeklyDoseUnit === vialUnit) masterDoseInVU = c.weeklyDoseValue;
+      else if(vialUnit === 'mg'  && c.weeklyDoseMg) masterDoseInVU = c.weeklyDoseMg;
+      else if(vialUnit === 'mcg' && c.weeklyDoseMg) masterDoseInVU = c.weeklyDoseMg * 1000;
+      else masterDoseInVU = c.weeklyDoseValue;  // IU/tablet no convert
+    }
     const doseFmt = (v) => {
       if(v < 1) return Math.round(v*100)/100;       // 0.35
       if(v < 10) return Math.round(v*100)/100;      // 3.50 -> 3.5
       return Math.round(v*10)/10;                    // 187.5 stays 187.5
     };
-    const wtLabel = masterDoseInVU > 0 ? `${doseFmt(masterDoseInVU)}${vialUnit}/wk` : (c.weekly_total || '—');
+    const wtLabel = masterDoseInVU > 0 ? `${doseFmt(masterDoseInVU)}${vialUnit}/wk` : '—';
     const currentDose = cycle.dose !== undefined ? cycle.dose : masterDoseInVU;
     const escName = c.name.replace(/'/g,"\\'");
 
@@ -845,7 +850,7 @@ export function pTimeline(){
     <div class="note" style="margin-top:8px;font-size:10px;color:var(--t3);line-height:1.5">
       <b>Per-quarter scope</b>: pattern cycle scoped ke ${qLabel} aja. Pindah quarter di card row atas untuk plan quarter lain.
       <b>ON/OFF</b>: lo set manual per compound (jumlah minggu). OFF=0 = one-shot (gak loop).
-      <b>Dose default</b>: cell ON otomatis isi value <code>weekly_total</code> peptide. <b>Click cell</b> untuk override (saved ke <code>custom_doses</code> — butuh login).
+      <b>Dose default</b>: cell ON otomatis isi value <code>weeklyDoseValue</code> peptide. <b>Click cell</b> untuk override (saved ke <code>custom_doses</code> — butuh login).
       <b>Vial calc</b>: ⌈total dose ÷ vial_size⌉.
     </div>
   </div>`;
@@ -887,7 +892,7 @@ export function pBudget(){
     </div>`;
   }
 
-  // Compound list dari DM — sorted by efficiency_score DESC
+  // Compound list dari DM — sorted by efficiencyScore DESC
   // Cost: sum across scopeQuarters per compound (kalau allMode → multi-quarter sum)
   const sorted = [...COMPOUNDS]
     .filter(c => dmSelected.has(c.name))
@@ -901,9 +906,9 @@ export function pBudget(){
       });
       return {
         ...c,
-        eff: c.efficiency_score || 0,
+        eff: c.efficiencyScore || 0,
         cost, vials, totalDose,
-        unit: VSPECS[c.name]?.unit || 'mg'
+        unit: c.vialUnit || VSPECS[c.name]?.unit || 'mg'
       };
     })
     .sort((a,b) => b.eff - a.eff);
@@ -922,7 +927,7 @@ export function pBudget(){
   const selPct = cap > 0 ? Math.min(100, Math.round(selCost / cap * 100)) : 0;
   const over = selCost > cap;
 
-  // Auto-pick suggestion: greedy by efficiency_score sampai budget cap habis
+  // Auto-pick suggestion: greedy by efficiencyScore sampai budget cap habis
   let sugCost = 0;
   const suggested = [];
   sorted.forEach(c => {

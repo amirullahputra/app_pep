@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=34';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=35';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -280,46 +280,13 @@ export let _dmAllNames=[];
 // TIMELINE (Phase A — in-memory only, reset on refresh)
 // ══════════════════════════════════════════════════════════
 
-// Parse cycle text dari kolom on_cycle/off_cycle → {type, min, max}
-// type ∈ 'weeks' | 'continuous' | 'prn' | 'none' | 'goal' | 'bundle_ref' | 'taper' | 'custom' | 'unknown'
-export function parseCycleText(text){
-  if(!text) return {type:'unknown'};
-  const t = String(text).toLowerCase();
-  if(/continuous/.test(t)) return {type:'continuous'};
-  if(/^prn$/.test(t.trim())) return {type:'prn'};
-  if(/tidak ada off/.test(t)) return {type:'none'};
-  if(/sesuai target/.test(t)) return {type:'goal'};
-  if(/via .* cycle|ikuti jadwal|lihat masing/.test(t)) return {type:'bundle_ref'};
-  if(/taper/.test(t)) return {type:'taper'};
-  const m = String(text).match(/(\d+)(?:-(\d+))?\s*(minggu|hari|bulan)/i);
-  if(m){
-    const lo = parseInt(m[1]);
-    const hi = parseInt(m[2]||m[1]);
-    const u = m[3].toLowerCase();
-    const f = u==='minggu' ? 1 : u==='hari' ? 1/7 : 4.33;
-    return {type:'weeks', min:Math.max(1,Math.round(lo*f)), max:Math.max(1,Math.round(hi*f))};
-  }
-  return {type:'custom', raw:text};
-}
-
-// Parse weekly_total → {value, unit} atau {raw} kalau gak match angka
-export function parseWeeklyTotal(text){
-  if(!text) return null;
-  const m = String(text).match(/^([\d.]+)(?:-([\d.]+))?\s*(mg|mcg|IU|tablet)/i);
-  if(m) return {value:parseFloat(m[1]), valueMax:parseFloat(m[2]||m[1]), unit:m[3]};
-  return {raw:text};
-}
-
-// Konversi dose dari satu unit ke unit lain (mcg ↔ mg)
-// Dipakai untuk normalize weekly_total dose ke vial_unit sebelum vial calc.
-export function doseInVialUnit(doseValue, doseUnit, vialUnit){
-  if(!doseUnit || !vialUnit || doseUnit.toLowerCase() === vialUnit.toLowerCase()) return doseValue;
-  const dU = doseUnit.toLowerCase();
-  const vU = vialUnit.toLowerCase();
-  if(dU === 'mcg' && vU === 'mg') return doseValue / 1000;
-  if(dU === 'mg' && vU === 'mcg') return doseValue * 1000;
-  return doseValue;  // IU, tablet — no conversion known
-}
+// Parser regex (parseCycleText, parseWeeklyTotal, doseInVialUnit) DIHAPUS di
+// schema v2 refactor. DB sekarang punya structured cols:
+//   compound.cycleOnWeeks / cycleOffWeeks (INTEGER)
+//   compound.cycleType    (TEXT enum 'weeks'|'continuous'|'prn'|'none'|'goal'|'bundle_ref'|'taper')
+//   compound.weeklyDoseMg / perInjectMg (NUMERIC, mg-normalized)
+//   compound.freqPerWeek  (INTEGER)
+// Unit conversion utility ada di models.js convertDose().
 
 // Timeline state — per (quarter, compound) cycle config, in-memory (Phase B persist later)
 // Key format: `${qid}|${compoundName}` → { on, off, start } (semua dalam weeks)
@@ -355,18 +322,13 @@ export function tlSetCycle(qid, name, field, value){
   }
 }
 
-// Seed defaults dari master compound (parsed dari on_cycle/off_cycle CSV)
+// Seed defaults dari master compound (canonical structured fields)
 export function tlSeedFromMaster(qid, name){
   const c = COMPOUNDS.find(x => x.name === name);
   if(!c) return;
-  const onP = parseCycleText(c.on_cycle);
-  const offP = parseCycleText(c.off_cycle);
-  const on = onP.type === 'weeks' ? onP.max
-           : onP.type === 'continuous' ? 99
-           : 0;
-  const off = offP.type === 'weeks' ? offP.max
-            : offP.type === 'none' ? 0
-            : 0;
+  // Continuous compound → on=99 sentinel biar tlCellStatus return 'on' selalu
+  const on  = c.cycleType === 'continuous' ? 99 : (c.cycleOnWeeks || 0);
+  const off = c.cycleOffWeeks || 0;
   TL.cycles[`${qid}|${name}`] = {on, off, start: 1};
 }
 
@@ -394,8 +356,8 @@ export function tlCellStatus(week, compound, qid){
   return (delta % cycleLen) < onLen ? 'on' : 'off';
 }
 
-// Hitung dose untuk week tertentu: custom > override per quarter > master weekly_total > 0
-// Output selalu dalam vial_unit (mg/mcg/IU/tablet sesuai VSPECS[name].unit).
+// Hitung dose untuk week tertentu: custom > override per quarter > canonical weekly dose > 0
+// Output dalam vial_unit (mg/mcg/IU/tablet). Pakai weeklyDoseValue (raw, sama unit dengan vial).
 export function tlDoseForWeek(week, compound, qid){
   if(!compound) return 0;
   const custom = customDoses[compound.name]?.[week];
@@ -405,27 +367,27 @@ export function tlDoseForWeek(week, compound, qid){
   const cycle = tlGetCycle(qid, compound.name);
   // Per-quarter override (dalam vial_unit)
   if(cycle.dose !== undefined && cycle.dose > 0) return cycle.dose;
-  // Fallback: parse master weekly_total + convert ke vial_unit
-  const wt = parseWeeklyTotal(compound.weekly_total);
-  if(!wt?.value) return 0;
-  const vialUnit = VSPECS[compound.name]?.unit || 'mg';
-  return doseInVialUnit(wt.value, wt.unit, vialUnit);
+  // Fallback: canonical weekly dose. weeklyDoseUnit udah match vial_unit di seed kebanyakan,
+  // tapi convert kalau beda (mis. compound vial_unit=mg, weekly stored in mcg → convert ke mg).
+  if(!compound.weeklyDoseValue) return 0;
+  const vialUnit = compound.vialUnit || 'mg';
+  if(compound.weeklyDoseUnit === vialUnit) return compound.weeklyDoseValue;
+  // Cross-unit (mcg↔mg) via mg-normalized field
+  if(vialUnit === 'mg' && compound.weeklyDoseMg) return compound.weeklyDoseMg;
+  if(vialUnit === 'mcg' && compound.weeklyDoseMg) return compound.weeklyDoseMg * 1000;
+  return compound.weeklyDoseValue;  // IU/tablet — no conversion
 }
 
-// Effective cycle: kalau user belum set via Timeline UI, fallback ke master CSV defaults.
+// Effective cycle: kalau user belum set via Timeline UI, fallback ke canonical defaults.
 // Dipakai oleh Overview (cost/vial summary) supaya gak nunggu user buka Timeline dulu.
 export function tlGetCycleEffective(qid, name){
   const set = TL.cycles[`${qid}|${name}`];
   if(set && (set.on > 0 || set.off > 0)) return {on:set.on, off:set.off, start:set.start||1};
   const c = COMPOUNDS.find(x => x.name === name);
   if(!c) return {on:0, off:0, start:1};
-  const onP = parseCycleText(c.on_cycle);
-  const offP = parseCycleText(c.off_cycle);
   const qWeeks = weeksInQuarter(qid).length || 13;
-  const on = onP.type === 'weeks' ? Math.min(onP.max, qWeeks)
-           : onP.type === 'continuous' ? qWeeks
-           : 0;
-  const off = offP.type === 'weeks' ? offP.max : 0;
+  const on  = c.cycleType === 'continuous' ? qWeeks : Math.min(c.cycleOnWeeks || 0, qWeeks);
+  const off = c.cycleOffWeeks || 0;
   return {on, off, start: 1};
 }
 
@@ -441,14 +403,18 @@ export function tlCostForQuarter(compound, qid){
   const vSize = vs?.vSize || 1;
   const unit = vs?.unit || 'mg';
   const vPrice = vs?.vPrice || 0;
-  // Override per quarter atau fallback ke master weekly_total (convert ke vial_unit)
+  // Override per quarter atau fallback ke canonical weekly dose (convert ke vial_unit)
   const userOverride = TL.cycles[`${qid}|${compound.name}`]?.dose;
   let perWeekDose;
   if(userOverride !== undefined && userOverride > 0){
     perWeekDose = userOverride;
+  } else if(compound.weeklyDoseValue){
+    if(compound.weeklyDoseUnit === unit) perWeekDose = compound.weeklyDoseValue;
+    else if(unit === 'mg'  && compound.weeklyDoseMg) perWeekDose = compound.weeklyDoseMg;
+    else if(unit === 'mcg' && compound.weeklyDoseMg) perWeekDose = compound.weeklyDoseMg * 1000;
+    else perWeekDose = compound.weeklyDoseValue;  // IU/tablet no convert
   } else {
-    const wt = parseWeeklyTotal(compound.weekly_total);
-    perWeekDose = wt?.value ? doseInVialUnit(wt.value, wt.unit, unit) : 0;
+    perWeekDose = 0;
   }
   const startOffset = (cycle.start || 1) - 1;  // 0-based offset
   let totalDose = 0;
