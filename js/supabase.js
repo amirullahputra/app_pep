@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=41';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=41';
-import { compoundFromDB } from './models.js?v=41';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=42';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek } from './state.js?v=42';
+import { compoundFromDB } from './models.js?v=42';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -24,13 +24,28 @@ async function restFetch(table, query=''){
   return res.json();
 }
 
+// ── JWT cache (avoid supa.auth.getSession() yang juga hang) ──
+// Token di-set saat onAuthStateChange fire (session ada di callback args).
+// Fallback: ambil dari localStorage langsung (Supabase store di sb-*-auth-token).
+let _jwt = null;
+
+function readJwtFromStorage(){
+  try {
+    // Supabase stores session as: sb-<project-ref>-auth-token
+    const projectRef = SUPA_URL.match(/https:\/\/([^.]+)/)?.[1];
+    if(!projectRef) return null;
+    const raw = localStorage.getItem(`sb-${projectRef}-auth-token`);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.access_token || parsed?.[0] || null;
+  } catch(_){ return null; }
+}
+
 // ── Authenticated REST (untuk RLS-protected user tables) ──
-// Pakai JWT dari supa.auth session — kalau supa.from() hang karena
-// GoTrueClient navigator.locks, plain fetch dengan Authorization: Bearer
-// tetap jalan. URL params PostgREST style (eq.user_id, order, dst).
+// Pakai _jwt cache (set via onAuthStateChange) atau fallback ke localStorage.
+// Sengaja avoid `await supa.auth.getSession()` karena GoTrueClient juga hang.
 async function authFetch(table, query='', opts={}){
-  const { data: { session } } = await supa.auth.getSession();
-  const jwt = session?.access_token;
+  const jwt = _jwt || readJwtFromStorage();
   if(!jwt) throw new Error(`${table}: no auth session`);
   const url = `${SUPA_URL}/rest/v1/${table}${query?'?'+query:''}`;
   const headers = {
@@ -512,9 +527,13 @@ function withTimeout(promise, ms, name){
 }
 
 export function setupAuthListener(){
+  // Init JWT cache dari localStorage sebelum auth state listener fires
+  _jwt = readJwtFromStorage();
+
   supa.auth.onAuthStateChange(async(event,session)=>{
     const user = session?.user || null;
     S.user = user;
+    _jwt = session?.access_token || null;  // cache JWT untuk authFetch
     updateAuthUI(user);
 
     // Auto-close login modal on successful sign-in (single source of truth,
