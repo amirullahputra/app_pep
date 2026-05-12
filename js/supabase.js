@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=57';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek, TL } from './state.js?v=57';
-import { compoundFromDB } from './models.js?v=57';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=58';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek, TL } from './state.js?v=58';
+import { compoundFromDB } from './models.js?v=58';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';
@@ -139,13 +139,17 @@ export async function loadAllPepData(){
 }
 
 export async function saveCompoundEdit(name, updates){
-  // updates: object with any fields to update on compounds row
-  await authFetch('compounds', `name=eq.${encodeURIComponent(name)}`, {
+  // updates: object with any fields to update on compounds row.
+  // Pakai return=representation untuk verify update kena RLS — kalau policy reject,
+  // response = [] (empty array) tanpa error. Throw biar UI bisa kasih tau user.
+  const data = await authFetch('compounds', `name=eq.${encodeURIComponent(name)}`, {
     method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
+    headers: { Prefer: 'return=representation' },
     body: JSON.stringify(updates)
   });
-  // Force reload on next call
+  if(!Array.isArray(data) || data.length === 0){
+    throw new Error('RLS policy reject — run migrate_compounds_update_policy.sql');
+  }
   _pepLoaded = false;
 }
 
