@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=37';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=38';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=37';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=37';
+} from './state.js?v=38';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=38';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=37';
+import * as stateModule from './state.js?v=38';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -965,14 +965,21 @@ export function pBudget(){
     </div>`;
   }).join('');
 
-  const redAlerts = conflicts.map(r => {
-    const cls = r.triggered ? `la-${r.lvl.toLowerCase()}` : 'la-ok';
-    return `<div class="live-alert ${cls}">
-      <div class="la-title">${r.triggered?'⚠':'✓'} ${r.lvl} — ${r.title}</div>
-      ${r.triggered?`<div class="la-body">${r.body}</div><div class="la-rec">→ ${r.rec}</div>`:''}
-      <div class="la-cmps">${r.cmps.map(c=>`<span class="la-cmp${r.active.includes(c)?' hit':''}">${c}</span>`).join('')}</div>
-    </div>`;
-  }).join('');
+  // Tampilin HANYA rule yang triggered. Default state (no DM picks) → empty state.
+  const triggeredRules = conflicts.filter(r => r.triggered);
+  const redAlerts = triggeredRules.length === 0
+    ? `<div style="text-align:center;padding:24px 16px;color:var(--t3);font-size:11.5px">
+         <div style="font-size:32px;margin-bottom:8px">🟢</div>
+         <div style="font-weight:700;color:var(--f3);margin-bottom:4px">Tidak ada konflik aktif</div>
+         <div>Pilih compound di Decision Matrix untuk monitor real-time. 47 rule standby.</div>
+       </div>`
+    : triggeredRules.map(r => `
+      <div class="live-alert la-${r.lvl.toLowerCase()}">
+        <div class="la-title">⚠ ${r.lvl} — ${r.title}</div>
+        <div class="la-body">${r.body}</div>
+        <div class="la-rec">→ ${r.rec}</div>
+        <div class="la-cmps">${r.cmps.map(c=>`<span class="la-cmp${r.active.includes(c)?' hit':''}">${c}</span>`).join('')}</div>
+      </div>`).join('');
 
   return `
   ${cBanner}
