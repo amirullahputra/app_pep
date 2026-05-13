@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=59';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=60';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=59';
-import * as stateModule from './state.js?v=59';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=59';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=60';
+import * as stateModule from './state.js?v=60';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=60';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=59';
+} from './supabase.js?v=60';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=59';
-import * as panelFns from './panels.js?v=59';
-import * as supaFns from './supabase.js?v=59';
+} from './panels.js?v=60';
+import * as panelFns from './panels.js?v=60';
+import * as supaFns from './supabase.js?v=60';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -134,7 +134,7 @@ function renderQuarterRow(){
     return `<div class="ph-card${sel?' sel-quarter':''}${isEmpty?' empty':''}${S.viewAll?' dim':''}" onclick="setQuarter('${qid}')">
       <div class="ph-tag" style="color:${dotColor}">
         <div class="ph-dot" style="background:${dotColor}"></div>
-        ${quarterLabel(qid).toUpperCase()}
+        ${quarterLabel(qid).toUpperCase()} ${sel?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
       </div>
       <div class="ph-name">${quarterLabel(qid)}</div>
       <div class="ph-desc">${hasWeeks ? `${weeks.length} minggu · ${wRange}` : 'Pre-protocol'}</div>
