@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=58';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=59';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=58';
-import * as stateModule from './state.js?v=58';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=58';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=59';
+import * as stateModule from './state.js?v=59';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=59';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=58';
+} from './supabase.js?v=59';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=58';
-import * as panelFns from './panels.js?v=58';
-import * as supaFns from './supabase.js?v=58';
+} from './panels.js?v=59';
+import * as panelFns from './panels.js?v=59';
+import * as supaFns from './supabase.js?v=59';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -53,7 +53,21 @@ Object.assign(window, panelFns, supaFns, stateModule);
 // Tab order: Overview → Decision Matrix → Timeline → Vial → Budget → Compounds
 function renderPanels(){
   const fns=[pOverview,pDecision,pTimeline,pVial,pBudget,pCompounds];
+  // Preserve focus + cursor position untuk avoid input "patah-patah" pas search/edit
+  const focused = document.activeElement;
+  const focusId = focused?.id;
+  const selStart = (focused && 'selectionStart' in focused) ? focused.selectionStart : null;
+  const selEnd   = (focused && 'selectionEnd'   in focused) ? focused.selectionEnd   : null;
   document.getElementById('panels-root').innerHTML=`<div class="panel act">${fns[S.tab]()}</div>`;
+  if(focusId){
+    const el = document.getElementById(focusId);
+    if(el && typeof el.focus === 'function'){
+      el.focus();
+      if(selStart != null && typeof el.setSelectionRange === 'function'){
+        try { el.setSelectionRange(selStart, selEnd ?? selStart); } catch(_){}
+      }
+    }
+  }
 }
 window.renderPanels = renderPanels;
 

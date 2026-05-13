@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=58';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=59';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=58';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=58';
+} from './state.js?v=59';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=59';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=58';
+import * as stateModule from './state.js?v=59';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -341,7 +341,7 @@ export function pDecision(){
   const libraryHtml = `
     <div class="dm-lib">
       <div class="dm-lib-hdr">📚 Library <span style="font-size:9px;font-weight:600;color:var(--t3);margin-left:auto">${filteredLibrary.length}/${COMPOUNDS.length}</span></div>
-      <input class="dm-lib-search" type="search" placeholder="🔍 Cari compound..." value="${DM.libSearch||''}"
+      <input id="dm-lib-search-input" class="dm-lib-search" type="search" placeholder="🔍 Cari compound..." value="${DM.libSearch||''}" autocomplete="off"
         oninput="DM.libSearch=this.value;renderPanels()">
       <div class="dm-lib-filters">${layerChips}</div>
       ${filteredLibrary.length === 0
