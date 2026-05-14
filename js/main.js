@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=61';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=62';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=61';
-import * as stateModule from './state.js?v=61';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=61';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=62';
+import * as stateModule from './state.js?v=62';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=62';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=61';
+} from './supabase.js?v=62';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=61';
-import * as panelFns from './panels.js?v=61';
-import * as supaFns from './supabase.js?v=61';
+} from './panels.js?v=62';
+import * as panelFns from './panels.js?v=62';
+import * as supaFns from './supabase.js?v=62';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -81,9 +81,14 @@ function renderQuarterRow(){
   // Fix 4 visible quarter cards: first year of protocol (Q3 2026 - Q2 2027)
   const VISIBLE_QIDS = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
 
-  // Compute stats per quarter (scope ke yang visible aja untuk grand total)
+  // Compute stats per quarter — pakai budget selection (S.budSel) jika ada,
+  // fallback ke DM.selectedByQuarter per-quarter jika belum ada budget selection.
   const allStats = VISIBLE_QIDS.map(qid => {
-    const selected = DM.selectedByQuarter[qid] || new Set();
+    const dmSet = DM.selectedByQuarter[qid] || new Set();
+    // Kalau budSel ada: filter hanya compound yang dicentang di budget DAN ada di DM quarter ini
+    const selected = (S.budSel && S.budSel.size > 0)
+      ? new Set([...dmSet].filter(n => S.budSel.has(n)))
+      : dmSet;
     const weeks = weeksInQuarter(qid);
     let totalCost = 0, totalVials = 0;
     selected.forEach(name => {
