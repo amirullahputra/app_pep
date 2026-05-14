@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=76';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=77';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=76';
-import * as stateModule from './state.js?v=76';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=76';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=77';
+import * as stateModule from './state.js?v=77';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=77';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=76';
+} from './supabase.js?v=77';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=76';
-import * as panelFns from './panels.js?v=76';
-import * as supaFns from './supabase.js?v=76';
+} from './panels.js?v=77';
+import * as panelFns from './panels.js?v=77';
+import * as supaFns from './supabase.js?v=77';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -326,6 +326,9 @@ window.switchBudQuarter = switchBudQuarter;
 window.toggleCat = toggleCat;
 
 // ── TIMELINE — Per-quarter cycle handlers ──
+
+// Filter bar (allMode): 'all' | 'active' | category key
+window.tlSetFilter = function(key){ S.tlFilter = key; renderPanels(); };
 
 // Preset dropdown handler: value = "on:off" string
 window.tlApplyPreset = function(qid, name, value){
