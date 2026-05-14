@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=65';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=66';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=65';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=65';
+} from './state.js?v=66';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=66';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=65';
+import * as stateModule from './state.js?v=66';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -1009,8 +1009,10 @@ export function pBudget(){
   // Auto-prune S.budSel ke subset DM-selected (kalau ada phantom dari quarter lain)
   const visibleNames = new Set(sorted.map(c => c.name));
   [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
-  // Default: kalau S.budSel kosong setelah prune, auto-check all DM-selected
-  if(S.budSel.size === 0){
+  // Default: auto-check all DM-selected HANYA kalau belum pernah ada budget saved di DB
+  // (S.budSelByQuarter[qid] kosong = belum pernah disimpan)
+  const hasSavedBudget = S.budSelByQuarter?.[qid]?.size > 0;
+  if(S.budSel.size === 0 && !hasSavedBudget){
     sorted.forEach(c => S.budSel.add(c.name));
   }
 
@@ -1103,10 +1105,13 @@ export function pBudget(){
     <div class="card">
       <div class="card-title">
         <span class="ico">💰</span> Filter Budget — ${qLabel}
-        <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--t2)">${selCount} terpilih · ${rpM(selCost)}</span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:700;color:var(--t2)">${selCount} terpilih · ${rpM(selCost)}</span>
+          <button onclick="saveBudgetToDB();S.budSelByQuarter[S.budQuarter]=new Set(S.budSel);renderQuarterRow();this.textContent='✅ Tersimpan';setTimeout(()=>{this.textContent='💾 Simpan';},1500)" style="padding:5px 14px;border-radius:6px;border:none;background:var(--acc);color:#fff;font-size:11px;font-weight:800;cursor:pointer">💾 Simpan</button>
+        </span>
       </div>
       ${cmpRows}
-      <div class="note">Centang untuk include/exclude. Compound source dari DM. Auto Pilih = greedy by Efficiency Score sampai budget cap habis.</div>
+      <div class="note">Centang untuk include/exclude lalu klik Simpan. Compound source dari DM. Auto Pilih = greedy by Efficiency Score sampai budget cap habis.</div>
     </div>
     <div>
       <div class="card" style="margin-bottom:10px">
