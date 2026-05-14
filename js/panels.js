@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=83';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=84';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=83';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=83';
+} from './state.js?v=84';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=84';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=83';
+import * as stateModule from './state.js?v=84';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): SELALU return DM selection. Budget_selections hanya untuk checkbox state.
@@ -837,13 +837,13 @@ export function pTimeline(){
       .filter(Boolean)
       .sort((a,b) => (a.cat||'').localeCompare(b.cat||'') || a.name.localeCompare(b.name));
 
-    // Active compound filter — default to first compound with any active cycle
-    let filt = S.tlFilter;
+    // Active compound filter — default to first compound with any active cycle, persist to state
     const validNames = new Set(allCpds.map(c => c.name));
-    if(!filt || !validNames.has(filt)){
-      filt = allCpds.find(c => visQ.some(q => budOrDM(q).has(c.name) && tlGetCycle(q,c.name).on > 0))?.name
-           || allCpds[0]?.name || '';
+    if(!S.tlFilter || !validNames.has(S.tlFilter)){
+      S.tlFilter = allCpds.find(c => visQ.some(q => budOrDM(q).has(c.name) && tlGetCycle(q,c.name).on > 0))?.name
+                || allCpds[0]?.name || '';
     }
+    const filt = S.tlFilter;
 
     // Selector chips
     const chips = allCpds.map(c => {
