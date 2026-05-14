@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=69';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=70';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=69';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=69';
+} from './state.js?v=70';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=70';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=69';
+import * as stateModule from './state.js?v=70';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -289,16 +289,30 @@ export function dmUpdateSummary(){window.renderPanels();}
 
 // ── pDecision — Drag-Drop Builder (Library + Selected zone per quarter) ──
 export function pDecision(){
-  // viewAll mode: DM fundamental per-quarter, tampil banner
+  // viewAll mode: tampil summary compound per quarter (read-only)
   if(S.viewAll){
+    const visQ = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
+    const qCards = visQ.map(q => {
+      const sel = [...budOrDM(q)];
+      const cpds = COMPOUNDS.filter(c => sel.includes(c.name)).sort((a,b)=>(b.efficiencyScore||0)-(a.efficiencyScore||0));
+      return `<div class="card" style="flex:1;min-width:220px">
+        <div class="card-title" style="margin-bottom:8px">
+          <span class="ico">🎯</span> ${quarterLabel(q)}
+          <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--acc)">${cpds.length} compound</span>
+        </div>
+        ${cpds.length === 0
+          ? '<div style="color:var(--t3);font-size:11px;padding:8px 0">Belum ada compound</div>'
+          : cpds.map(c => `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+              <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8px;min-width:58px;text-align:center">${CAT[c.cat]?.n||c.cat}</span>
+              <span style="flex:1;font-size:11px;font-weight:700;color:var(--t0)">${c.name}</span>
+              <span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;background:${scCol(c.efficiencyScore||0)};color:#fff">EFF ${c.efficiencyScore||0}</span>
+            </div>`).join('')}
+        <button onclick="setQuarter('${q}')" style="margin-top:10px;width:100%;padding:6px;border-radius:6px;border:1.5px solid var(--acc);background:transparent;color:var(--acc);font-size:11px;font-weight:700;cursor:pointer">Edit ${quarterLabel(q)} →</button>
+      </div>`;
+    }).join('');
     return `<div class="card">
-      <div class="card-title"><span class="ico">🎯</span> Decision Matrix — All Quarters Mode</div>
-      <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.6">
-        <div style="font-size:36px;margin-bottom:10px">📊</div>
-        <div>Mode <b>All Quarters</b> aktif (klik Grand Total).</div>
-        <div style="margin-top:6px;font-size:11px">Decision Matrix per-quarter — buka quarter spesifik di atas untuk edit selection compound.</div>
-        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setQuarter('Q3_2026')">Buka Q3 2026 →</button>
-      </div>
+      <div class="card-title"><span class="ico">🎯</span> Decision Matrix — All Quarters</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">${qCards}</div>
     </div>`;
   }
   const qid = S.quarter;
@@ -812,17 +826,43 @@ export function pVial(){
 // P3 — TIMELINE
 // ──────────────────────────────────────────
 export function pTimeline(){
-  // viewAll mode: Timeline fundamental per-quarter, tampil banner
+  // viewAll mode: tampil timeline per quarter berurutan (read-only overview)
   if(S.viewAll){
-    return `<div class="card">
-      <div class="card-title"><span class="ico">🗓</span> Timeline — All Quarters Mode</div>
-      <div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px;line-height:1.6">
-        <div style="font-size:36px;margin-bottom:10px">📊</div>
-        <div>Mode <b>All Quarters</b> aktif (klik Grand Total).</div>
-        <div style="margin-top:6px;font-size:11px">Timeline per-quarter — buka quarter spesifik di atas untuk set ON/OFF/START/DOSE per compound.</div>
-        <button class="btn" style="margin-top:14px;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="setQuarter('Q3_2026')">Buka Q3 2026 →</button>
-      </div>
-    </div>`;
+    const visQ = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
+    const sections = visQ.map(q => {
+      const weeks = weeksInQuarter(q);
+      if(!weeks.length) return '';
+      const sel = [...budOrDM(q)];
+      const cpds = COMPOUNDS.filter(c => sel.includes(c.name));
+      if(!cpds.length) return '';
+      const wRange = `W${weeks[0]}–W${weeks[weeks.length-1]}`;
+      // Mini grid: compound × weeks (dots only)
+      const rows = cpds.map(c => {
+        const cells = weeks.map(w => {
+          const st = tlCellStatus(w, c, q);
+          const col = st==='on'?'var(--acc)':st==='off'?'var(--bdr2)':'var(--bg3)';
+          return `<div style="width:10px;height:10px;border-radius:2px;background:${col};flex-shrink:0"></div>`;
+        }).join('');
+        return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:7px;min-width:52px;text-align:center;flex-shrink:0">${CAT[c.cat]?.n||c.cat}</span>
+          <span style="font-size:10px;font-weight:700;color:var(--t0);width:110px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
+          <div style="display:flex;gap:2px;flex-wrap:nowrap;overflow:hidden">${cells}</div>
+        </div>`;
+      }).join('');
+      return `<div class="card" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div class="card-title" style="margin:0"><span class="ico">🗓</span> ${quarterLabel(q)}</div>
+          <span style="font-size:10px;color:var(--t2)">${wRange} · ${cpds.length} compound</span>
+          <button onclick="setQuarter('${q}')" style="margin-left:auto;padding:4px 12px;border-radius:6px;border:1.5px solid var(--acc);background:transparent;color:var(--acc);font-size:10px;font-weight:700;cursor:pointer">Edit →</button>
+        </div>
+        <div style="overflow-x:auto">${rows}</div>
+        <div style="margin-top:6px;font-size:9px;color:var(--t3)">
+          <span style="display:inline-block;width:10px;height:10px;background:var(--acc);border-radius:2px;vertical-align:middle;margin-right:3px"></span>ON
+          <span style="display:inline-block;width:10px;height:10px;background:var(--bdr2);border-radius:2px;vertical-align:middle;margin:0 3px 0 8px"></span>OFF
+        </div>
+      </div>`;
+    }).join('');
+    return `<div>${sections}</div>`;
   }
   const qid = S.quarter || QUARTERS[0];
   const qLabel = quarterLabel(qid);
