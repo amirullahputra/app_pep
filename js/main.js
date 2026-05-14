@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=81';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=82';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=81';
-import * as stateModule from './state.js?v=81';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=81';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=82';
+import * as stateModule from './state.js?v=82';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=82';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=81';
+} from './supabase.js?v=82';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=81';
-import * as panelFns from './panels.js?v=81';
-import * as supaFns from './supabase.js?v=81';
+} from './panels.js?v=82';
+import * as panelFns from './panels.js?v=82';
+import * as supaFns from './supabase.js?v=82';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -114,9 +114,9 @@ function renderQuarterRow(){
   const allCard = `<div class="${allCardClass}" style="cursor:pointer" onclick="setViewAll(true)">
     <div class="ph-tag" style="color:${S.viewAll?'var(--acc)':'var(--t3)'}">
       <div class="ph-dot" style="background:${S.viewAll?'var(--acc)':'var(--t3)'}"></div>
-      GRAND TOTAL · ${allStats.length}Q ${S.viewAll?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
+      MACROCYCLE 1 · ${allStats.length}Q ${S.viewAll?'<span style="margin-left:6px;padding:1px 6px;background:var(--acc);color:#fff;border-radius:8px;font-size:8.5px">AKTIF</span>':''}
     </div>
-    <div class="ph-name">Multi-Quarter Overview</div>
+    <div class="ph-name">Reset Metabolisme</div>
     <div class="ph-desc">${grandCompounds} compounds · ${grandWeeks} minggu · ${activeQ}/${allStats.length} active</div>
     <div class="ph-grid" style="grid-template-columns:1fr 1fr">
       <div class="ph-stat" style="grid-column:1/-1"><div class="ph-stat-l">Grand Total</div><div class="ph-stat-v" style="color:${S.viewAll?'var(--acc)':'var(--t1)'};font-size:18px">${rpM(grandTotal)}</div></div>

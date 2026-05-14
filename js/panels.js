@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=81';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=82';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=81';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=81';
+} from './state.js?v=82';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=82';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=81';
+import * as stateModule from './state.js?v=82';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): SELALU return DM selection. Budget_selections hanya untuk checkbox state.
@@ -879,8 +879,8 @@ export function pTimeline(){
     const allWeeks = [];
     visQ.forEach(q => weeksInQuarter(q).forEach(w => allWeeks.push({w, q})));
 
-    const CELL_W = 14; // px per cell
-    const LABEL_W = 220; // px left column
+    const CELL_W = 22; // px per cell
+    const LABEL_W = 190; // px left column
 
     // Quarter header spans
     const qHeaders = visQ.map(q => {
