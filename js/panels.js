@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=74';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=75';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=74';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=74';
+} from './state.js?v=75';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=75';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=74';
+import * as stateModule from './state.js?v=75';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -831,12 +831,11 @@ export function pTimeline(){
     const visQ = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
     const CELL = 20;
     const GAP  = 2;
-    // Label col: category badge (58px) + name (140px) + cycle table (per active quarter)
-    // Cycle table fixed 280px (4Q × 70px each), total label = 58+8+140+8+280 = 494px
     const CAT_W  = 58;
-    const NAME_W = 140;
-    const CYC_W  = 280; // fixed cycle input block
-    const LABEL_W = CAT_W + 8 + NAME_W + 8 + CYC_W; // 494px
+    const NAME_W = 150;
+    // Cycle block: tiap active quarter = 1 dropdown (110px) + gap → max 4×112 = 448px
+    const QCOL_W = 112;
+    const LABEL_W = CAT_W + 8 + NAME_W + 8; // badge + name, cycles di kolom terpisah setelah scroll
 
     const allWeeks = [];
     visQ.forEach(q => weeksInQuarter(q).forEach(w => allWeeks.push({w, q})));
@@ -856,14 +855,47 @@ export function pTimeline(){
       .filter(Boolean)
       .sort((a,b) => (a.cat||'').localeCompare(b.cat||'') || a.name.localeCompare(b.name));
 
-    // Quarter header spans — offset by LABEL_W
+    // Preset options: value = "on:off" — OFF=0 means blast (one-shot, no repeat)
+    // Quarter has ~13 weeks. Presets based on that.
+    const PRESETS = [
+      { label: '— belum diset',  on: 0,  off: 0 },
+      { label: 'Full quarter',   on: 99, off: 0 },  // continuous sentinel
+      { label: 'Blast 12w',     on: 12, off: 0 },
+      { label: 'Blast 10w',     on: 10, off: 0 },
+      { label: 'Blast 8w',      on: 8,  off: 0 },
+      { label: 'Blast 6w',      on: 6,  off: 0 },
+      { label: 'Blast 4w',      on: 4,  off: 0 },
+      { label: '6on / 2off',    on: 6,  off: 2 },
+      { label: '4on / 1off',    on: 4,  off: 1 },
+      { label: '8on / 4off',    on: 8,  off: 4 },
+    ];
+
+    // Helper: match cycle to preset value string
+    function cycleToPreset(cycle){
+      if(!cycle || (cycle.on === 0 && cycle.off === 0)) return '0:0';
+      for(const p of PRESETS){
+        if(p.on === cycle.on && p.off === cycle.off) return `${p.on}:${p.off}`;
+      }
+      return 'custom';
+    }
+
+    function presetLabel(cycle){
+      if(!cycle || cycle.on === 0) return '— belum diset';
+      if(cycle.on >= 99) return 'Full quarter';
+      const match = PRESETS.find(p => p.on === cycle.on && p.off === cycle.off);
+      if(match) return match.label;
+      return `${cycle.on}on${cycle.off>0?` / ${cycle.off}off`:''}`;
+    }
+
+    const selStyle = `padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;background:var(--bg2);color:var(--t0);font-size:11px;font-weight:600;cursor:pointer;width:108px;font-family:inherit`;
+
+    // Quarter header spans
     const qHeaderCells = visQ.map(q => {
       const ws = weeksInQuarter(q);
       const spanW = ws.length * (CELL + GAP);
       return `<div style="min-width:${spanW}px;width:${spanW}px;text-align:center;font-size:10px;font-weight:800;color:var(--t0);border-left:2px solid var(--acc);padding:4px 2px;background:var(--bg2)">${quarterLabel(q)}</div>`;
     }).join('');
 
-    // Week label row
     const wkHeaderCells = allWeeks.map(({w, q}, i) => {
       const isQStart = i === 0 || allWeeks[i-1].q !== q;
       const border = isQStart ? 'border-left:2px solid var(--acc);' : '';
@@ -872,42 +904,37 @@ export function pTimeline(){
       return `<div style="min-width:${CELL}px;width:${CELL}px;text-align:center;font-size:8px;font-weight:${fw};color:${col};${border};flex-shrink:0">W${w}</div>`;
     }).join('');
 
-    const inputStyle = `width:32px;padding:2px 4px;border:1px solid var(--bdr);border-radius:4px;background:var(--bg2);color:var(--t0);font-size:10px;text-align:center;font-family:inherit`;
-    const lblStyle = `font-size:9px;font-weight:600;color:var(--t3);margin-right:2px`;
-
+    // Per-compound cycle dropdowns — satu baris horizontal, tiap active quarter 1 dropdown
     const rows = allCpds.map(c => {
       const escName = c.name.replace(/'/g,"\\'");
       const vialUnit = c.vialUnit || VSPECS[c.name]?.unit || 'mg';
 
-      // Cycle input grid: each active quarter = 1 column (70px wide)
-      // Header row: Q label | Cells: ON / OFF / ST
       const activeQ = visQ.filter(q => budOrDM(q).has(c.name));
-      const cycleColW = activeQ.length > 0 ? Math.floor(CYC_W / activeQ.length) : CYC_W;
-      const cycleCols = activeQ.map(q => {
+
+      // Dropdown per quarter
+      const dropdowns = activeQ.map(q => {
         const cycle = tlGetCycle(q, c.name);
-        const ws = weeksInQuarter(q);
-        const maxW = ws.length;
-        const ql = quarterLabel(q); // "Q3 2026"
-        return `<div style="min-width:${cycleColW}px;width:${cycleColW}px;flex-shrink:0;padding:0 4px">
-          <div style="font-size:8px;font-weight:800;color:var(--acc);margin-bottom:4px;white-space:nowrap">${ql}</div>
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <label style="display:flex;align-items:center;gap:4px">
-              <span style="${lblStyle}">ON</span>
-              <input type="number" min="0" max="${maxW}" value="${cycle.on||''}" onchange="tlSetOn('${q}','${escName}',this.value)" placeholder="0" style="${inputStyle}">
-            </label>
-            <label style="display:flex;align-items:center;gap:4px">
-              <span style="${lblStyle}">OFF</span>
-              <input type="number" min="0" max="${maxW}" value="${cycle.off||''}" onchange="tlSetOff('${q}','${escName}',this.value)" placeholder="0" style="${inputStyle}">
-            </label>
-            <label style="display:flex;align-items:center;gap:4px">
-              <span style="${lblStyle}">ST</span>
-              <input type="number" min="1" max="${maxW}" value="${cycle.start||1}" onchange="tlSetStart('${q}','${escName}',this.value)" style="${inputStyle}" title="Week mulai di quarter ini">
-            </label>
-          </div>
+        const curVal = cycleToPreset(cycle);
+        const options = PRESETS.map(p => {
+          const val = `${p.on}:${p.off}`;
+          const sel = (curVal === val) ? 'selected' : '';
+          return `<option value="${val}" ${sel}>${p.label}</option>`;
+        }).join('');
+        // custom option jika tidak match preset
+        const customSel = curVal === 'custom' ? 'selected' : '';
+        const customLabel = curVal === 'custom' ? presetLabel(cycle) : 'Custom...';
+        const allOpts = options + `<option value="custom" ${customSel}>${customLabel}</option>`;
+        const ql = quarterLabel(q).replace(' ','<br>');
+        return `<div style="display:flex;flex-direction:column;gap:3px;min-width:${QCOL_W}px">
+          <span style="font-size:8px;font-weight:800;color:var(--acc);white-space:nowrap">${quarterLabel(q)}</span>
+          <select style="${selStyle}" onchange="tlApplyPreset('${q}','${escName}',this.value)">
+            ${allOpts}
+          </select>
+          <span style="font-size:8px;color:var(--t3)">${cycle.on>0?(cycle.on>=99?'W1–W13 aktif semua':`W1–W${cycle.on} aktif${cycle.off>0?`, lalu ${cycle.off}w jeda`:' (blast)'}`): 'Belum aktif'}</span>
         </div>`;
       }).join('');
 
-      const cycleBlock = `<div style="display:flex;min-width:${CYC_W}px;width:${CYC_W}px;flex-shrink:0;border-left:1px solid var(--bg3);padding-left:6px">${cycleCols}</div>`;
+      const cycleRow = `<div style="display:flex;gap:10px;padding:4px 0 6px 0;border-bottom:1px solid var(--bg2)">${dropdowns}</div>`;
 
       const cells = allWeeks.map(({w, q}, i) => {
         const isQStart = i === 0 || allWeeks[i-1].q !== q;
@@ -917,50 +944,53 @@ export function pTimeline(){
         const dose = inScope ? tlDoseForWeek(w, c, q) : 0;
         const hasCustom = customDoses[c.name]?.[w] !== undefined;
         const catCls = inScope && st === 'on' ? (CAT[c.cat]?.cls || '') : '';
-        const bg = st==='on' && !catCls ? 'var(--acc)' : st==='off' ? 'var(--bdr2)' : st==='inactive' ? 'var(--bg3)' : '';
-        const opacity = inScope ? '1' : '0.3';
+        const bg = st==='on' && !catCls ? 'var(--acc)' : st==='off' ? 'var(--bdr2)' : 'var(--bg3)';
+        const opacity = inScope ? '1' : '0.25';
         const cursor = inScope ? 'pointer' : 'default';
         const onclick = inScope ? `onclick="openDoseEdit('${escName}',${w})"` : '';
         const tip = inScope ? `${c.name} W${w} · ${st.toUpperCase()}${dose>0?` · ${dose}${vialUnit}`:''}${hasCustom?' ✏️':''}` : `${c.name} — tidak aktif di ${quarterLabel(q)}`;
         const doseStr = dose > 0 && st==='on' ? `<span style="font-size:6px;color:#fff;font-weight:700;line-height:1">${dose}</span>` : '';
         const shadow = hasCustom && inScope ? 'box-shadow:0 0 0 1.5px #f59e0b inset;' : '';
-        return `<div class="${catCls?`tl-on ${catCls}`:''}" ${onclick} title="${tip}" style="min-width:${CELL}px;width:${CELL}px;height:${CELL}px;border-radius:3px;${bg?`background:${bg};`:''}flex-shrink:0;opacity:${opacity};${border};cursor:${cursor};display:flex;align-items:center;justify-content:center;${shadow}">${doseStr}</div>`;
+        return `<div class="${catCls?`tl-on ${catCls}`:''}" ${onclick} title="${tip}" style="min-width:${CELL}px;width:${CELL}px;height:${CELL}px;border-radius:3px;background:${bg};flex-shrink:0;opacity:${opacity};${border};cursor:${cursor};display:flex;align-items:center;justify-content:center;${shadow}">${doseStr}</div>`;
       }).join('');
 
-      return `<div style="display:flex;align-items:stretch;border-bottom:1px solid var(--bg2);margin-bottom:0">
-        <!-- Label column: badge + name + cycle inputs -->
-        <div style="min-width:${LABEL_W}px;width:${LABEL_W}px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 0">
-          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:7px;min-width:${CAT_W}px;width:${CAT_W}px;text-align:center;flex-shrink:0">${CAT[c.cat]?.n||c.cat}</span>
-          <span style="font-size:11px;font-weight:700;color:var(--t0);min-width:${NAME_W}px;width:${NAME_W}px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</span>
-          ${cycleBlock}
+      return `<div>
+        <!-- Compound name + category -->
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px 0;border-top:1px solid var(--bg2)">
+          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:7px;min-width:${CAT_W}px;text-align:center;flex-shrink:0">${CAT[c.cat]?.n||c.cat}</span>
+          <span style="font-size:12px;font-weight:800;color:var(--t0)">${c.name}</span>
         </div>
-        <!-- Cell grid -->
-        <div style="display:flex;gap:${GAP}px;align-items:center;padding:6px 0;flex-wrap:nowrap">${cells}</div>
+        <!-- Cycle dropdowns per active quarter — full width, no scroll -->
+        ${cycleRow}
+        <!-- Week grid row — scrolls with rest of table -->
+        <div id="tl-cells-${escName.replace(/\W/g,'_')}" style="display:flex;gap:${GAP}px;align-items:center;padding:4px 0 2px 0;min-width:max-content">${cells}</div>
       </div>`;
     }).join('');
+
+    // Two-section layout: left fixed labels + right scrollable grid
+    // Actually: put everything in one scrollable block but with compound name spanning full width
+    // Week header is inside scroll area, compound names + dropdowns above each row
 
     return `<div class="card" style="padding:14px 12px">
       <div class="card-title">
         <span class="ico">🗓</span> Timeline — All Quarters · ${allCpds.length} compounds · W1–W${allWeeks[allWeeks.length-1].w}
-        <span style="margin-left:auto;font-size:10px;color:var(--t3);font-weight:400">Klik cell untuk edit dose · ON/OFF/ST = cycle per quarter</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--t3);font-weight:400">Klik cell untuk edit dose per week</span>
       </div>
+      <!-- Scrollable grid: quarter headers + week labels + per-compound rows -->
       <div style="overflow-x:auto;margin-top:12px;padding-bottom:8px">
         <div style="display:inline-block;min-width:max-content">
-          <div style="display:flex;gap:${GAP}px;margin-left:${LABEL_W}px;margin-bottom:2px">${qHeaderCells}</div>
-          <div style="display:flex;align-items:center;gap:${GAP}px;margin-bottom:4px">
-            <div style="min-width:${LABEL_W}px;width:${LABEL_W}px;flex-shrink:0;font-size:9px;font-weight:700;color:var(--t2);padding-left:0">
-              Compound <span style="font-weight:400;color:var(--t3);margin-left:8px">↓ ON / OFF / Start week per quarter</span>
-            </div>
-            <div style="display:flex;gap:${GAP}px">${wkHeaderCells}</div>
-          </div>
+          <!-- Quarter spans header -->
+          <div style="display:flex;gap:${GAP}px;margin-bottom:2px">${qHeaderCells}</div>
+          <!-- Week label row -->
+          <div style="display:flex;gap:${GAP}px;margin-bottom:8px">${wkHeaderCells}</div>
+          <!-- Compound rows -->
           ${rows}
         </div>
       </div>
       <div style="margin-top:8px;font-size:9px;color:var(--t3);display:flex;gap:12px;flex-wrap:wrap">
-        <span><span style="display:inline-block;width:12px;height:12px;background:var(--acc);border-radius:2px;vertical-align:middle;margin-right:3px"></span>ON</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:var(--bdr2);border-radius:2px;vertical-align:middle;margin-right:3px"></span>OFF</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;vertical-align:middle;margin-right:3px;opacity:.3"></span>Tidak aktif</span>
-        <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:3px;box-shadow:0 0 0 1.5px #f59e0b inset;background:var(--acc)"></span>Custom dose</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--acc);border-radius:2px;vertical-align:middle;margin-right:3px"></span>ON / aktif</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--bdr2);border-radius:2px;vertical-align:middle;margin-right:3px"></span>OFF / jeda</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;vertical-align:middle;margin-right:3px;opacity:.25"></span>Tidak aktif</span>
       </div>
     </div>`;
   }

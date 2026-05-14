@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=74';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=75';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=74';
-import * as stateModule from './state.js?v=74';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=74';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=75';
+import * as stateModule from './state.js?v=75';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=75';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=74';
+} from './supabase.js?v=75';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=74';
-import * as panelFns from './panels.js?v=74';
-import * as supaFns from './supabase.js?v=74';
+} from './panels.js?v=75';
+import * as panelFns from './panels.js?v=75';
+import * as supaFns from './supabase.js?v=75';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -326,6 +326,20 @@ window.switchBudQuarter = switchBudQuarter;
 window.toggleCat = toggleCat;
 
 // ── TIMELINE — Per-quarter cycle handlers ──
+
+// Preset dropdown handler: value = "on:off" string
+window.tlApplyPreset = function(qid, name, value){
+  if(value === 'custom') return; // custom = no-op, user edited manually before
+  const [on, off] = value.split(':').map(Number);
+  if(typeof window.tlSetCycle === 'function'){
+    window.tlSetCycle(qid, name, 'on', on);
+    window.tlSetCycle(qid, name, 'off', off);
+    window.tlSetCycle(qid, name, 'start', 1); // always reset to W1 on preset change
+  }
+  renderPanels();
+  renderQuarterRow();
+};
+
 window.tlSetOn = function(qid, name, value){
   if(typeof window.tlSetCycle === 'function'){
     window.tlSetCycle(qid, name, 'on', value);
