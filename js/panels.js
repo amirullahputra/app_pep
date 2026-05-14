@@ -1,7 +1,7 @@
-// ══════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=60';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=61';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=60';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=60';
+} from './state.js?v=61';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=61';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=60';
+import * as stateModule from './state.js?v=61';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -399,10 +399,14 @@ export function pVial(){
   const today=new Date();
   const vt=S.vialTab||'stok';
 
-  // ── FILTER BY pipeline (tentatif + deal dari Decision Matrix) ──
+  // ── FILTER BY budget selection (centang di Budget tab = yang beneran dibeli) ──
+  // S.budSel = Set<name> dari Budget checkboxes. Kalau kosong fallback ke DM.
   const allMode = S.viewAll === true;
   let dealtNames;
-  if(allMode){
+  if(S.budSel && S.budSel.size > 0){
+    // Gunakan budget selection sebagai sumber kebenaran
+    dealtNames = new Set(S.budSel);
+  } else if(allMode){
     dealtNames = new Set();
     QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealtNames.add(n)));
   } else {
@@ -423,8 +427,10 @@ export function pVial(){
   const summaryBar=`
   <div style="font-size:10px;color:var(--t3);margin-bottom:6px">
     ${noDeal
-      ?'Menampilkan semua compound — centang di Decision Matrix untuk filter'
-      :`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang di-deal di Decision Matrix`}
+      ?'Menampilkan semua compound — centang di Budget tab untuk filter aktif'
+      :S.budSel?.size>0
+        ?`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang dicentang di Budget (aktif/terbeli)`
+        :`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang di-deal di Decision Matrix`}
   </div>
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <div class="card" style="flex:1;min-width:80px;text-align:center;padding:10px 8px;border-top:3px solid var(--f3)">

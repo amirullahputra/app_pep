@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════
 // DATA — placeholders populated at runtime from Supabase
 // ══════════════════════════════════════════════════════════
 // Master data (PHASES, COMPOUNDS, SC, SP, MECHS, VSPECS, SHELF_LIFE, REDUNDANCY)

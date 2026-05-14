@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════
 // MODELS — canonical data shapes + DB adapters
 // ══════════════════════════════════════════════════════════
 // Single source of truth untuk shape data yang dipakai di seluruh app.
