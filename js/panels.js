@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=67';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=68';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=67';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=67';
+} from './state.js?v=68';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=68';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=67';
+import * as stateModule from './state.js?v=68';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -965,8 +965,8 @@ export function pBudget(){
   const dmSelected = allMode ? budOrDMAll() : budOrDM(qid);
   const scopeQuarters = activeScopeQuarters(allMode, qid);
 
-  // Empty state: DM untuk quarter ini belum di-isi
-  if(dmSelected.size === 0){
+  // Empty state: hanya kalau single quarter dan DM-nya kosong
+  if(dmSelected.size === 0 && !allMode){
     return `
     <div class="card">
       <div class="card-title"><span class="ico">💰</span> Budget + Conflict — ${qLabel}</div>
