@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=65';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=69';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=65';
-import * as stateModule from './state.js?v=65';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=65';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=69';
+import * as stateModule from './state.js?v=69';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=69';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=65';
+} from './supabase.js?v=69';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=65';
-import * as panelFns from './panels.js?v=65';
-import * as supaFns from './supabase.js?v=65';
+} from './panels.js?v=69';
+import * as panelFns from './panels.js?v=69';
+import * as supaFns from './supabase.js?v=69';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -59,6 +59,8 @@ function renderPanels(){
   const selStart = (focused && 'selectionStart' in focused) ? focused.selectionStart : null;
   const selEnd   = (focused && 'selectionEnd'   in focused) ? focused.selectionEnd   : null;
   document.getElementById('panels-root').innerHTML=`<div class="panel act">${fns[S.tab]()}</div>`;
+  // Quarter cards selalu sync dengan data terbaru (budget + DM)
+  try { renderQuarterRow(); } catch(_){}
   if(focusId){
     const el = document.getElementById(focusId);
     if(el && typeof el.focus === 'function'){
