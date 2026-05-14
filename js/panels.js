@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=80';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=81';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=80';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=80';
+} from './state.js?v=81';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=81';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=80';
+import * as stateModule from './state.js?v=81';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): SELALU return DM selection. Budget_selections hanya untuk checkbox state.
@@ -1125,15 +1125,15 @@ export function pBudget(){
   // Prune S.budSel: hapus nama yang sudah tidak ada di DM
   const visibleNames = new Set(sorted.map(c => c.name));
   [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
-  // Sync S.budSel dari saved budget (subset dari DM), atau default semua DM di-check
-  const savedSel = S.budSelByQuarter?.[qid];
-  if(savedSel && savedSel.size > 0){
-    // Pakai saved, tapi hanya yang masih ada di DM (prune stale)
-    S.budSel = new Set([...savedSel].filter(n => visibleNames.has(n)));
-    // Kalau DM bertambah compound baru vs saved, tambahkan ke budSel otomatis
-    sorted.forEach(c => { if(!savedSel.has(c.name)) S.budSel.add(c.name); });
-  } else if(S.budSel.size === 0){
-    sorted.forEach(c => S.budSel.add(c.name));
+  // Init S.budSel HANYA kalau kosong (pertama load / quarter baru)
+  // Setelah user interaksi (check/uncheck), S.budSel sudah ada isi → jangan di-override
+  if(S.budSel.size === 0){
+    const savedSel = S.budSelByQuarter?.[qid];
+    if(savedSel && savedSel.size > 0){
+      S.budSel = new Set([...savedSel].filter(n => visibleNames.has(n)));
+    } else {
+      sorted.forEach(c => S.budSel.add(c.name));
+    }
   }
 
   // Budget math (cuma compound yang di-check)
