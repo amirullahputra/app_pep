@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=79';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=80';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,29 +12,22 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=79';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=79';
+} from './state.js?v=80';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=80';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=79';
+import * as stateModule from './state.js?v=80';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
-// budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
-// Semua panel WAJIB pakai ini — bukan DM.selectedByQuarter langsung.
+// budOrDM(qid): SELALU return DM selection. Budget_selections hanya untuk checkbox state.
+// Source of truth compound list = DM. Budget tab = centang subset dari DM.
 function budOrDM(qid){
-  const bs = S.budSelByQuarter?.[qid];
-  if(bs && bs.size > 0) return bs;
   return DM.selectedByQuarter[qid] || new Set();
 }
-// Union semua quarter (untuk allMode)
+// Union semua quarter (untuk allMode) — selalu dari DM
 function budOrDMAll(){
-  const hasBudget = S.budSelByQuarter && Object.values(S.budSelByQuarter).some(s => s.size > 0);
   const out = new Set();
-  if(hasBudget){
-    QUARTERS.forEach(q => S.budSelByQuarter[q]?.forEach(n => out.add(n)));
-  } else {
-    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => out.add(n)));
-  }
+  QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => out.add(n)));
   return out;
 }
 // Quarter scope yang aktif (ada compound-nya)
@@ -1129,13 +1122,17 @@ export function pBudget(){
     })
     .sort((a,b) => b.eff - a.eff);
 
-  // Auto-prune S.budSel ke subset DM-selected (kalau ada phantom dari quarter lain)
+  // Prune S.budSel: hapus nama yang sudah tidak ada di DM
   const visibleNames = new Set(sorted.map(c => c.name));
   [...S.budSel].forEach(n => { if(!visibleNames.has(n)) S.budSel.delete(n); });
-  // Default: auto-check all DM-selected HANYA kalau belum pernah ada budget saved di DB
-  // (S.budSelByQuarter[qid] kosong = belum pernah disimpan)
-  const hasSavedBudget = S.budSelByQuarter?.[qid]?.size > 0;
-  if(S.budSel.size === 0 && !hasSavedBudget){
+  // Sync S.budSel dari saved budget (subset dari DM), atau default semua DM di-check
+  const savedSel = S.budSelByQuarter?.[qid];
+  if(savedSel && savedSel.size > 0){
+    // Pakai saved, tapi hanya yang masih ada di DM (prune stale)
+    S.budSel = new Set([...savedSel].filter(n => visibleNames.has(n)));
+    // Kalau DM bertambah compound baru vs saved, tambahkan ke budSel otomatis
+    sorted.forEach(c => { if(!savedSel.has(c.name)) S.budSel.add(c.name); });
+  } else if(S.budSel.size === 0){
     sorted.forEach(c => S.budSel.add(c.name));
   }
 
