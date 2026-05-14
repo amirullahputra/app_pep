@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=62';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=63';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=62';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=62';
+} from './state.js?v=63';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=63';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=62';
+import * as stateModule from './state.js?v=63';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -399,18 +399,20 @@ export function pVial(){
   const today=new Date();
   const vt=S.vialTab||'stok';
 
-  // ── FILTER BY budget selection (centang di Budget tab = yang beneran dibeli) ──
-  // S.budSel = Set<name> dari Budget checkboxes. Kalau kosong fallback ke DM.
+  // ── FILTER BY budget selection (S.budSelByQuarter = per-quarter dari DB) ──
   const allMode = S.viewAll === true;
   let dealtNames;
-  if(S.budSel && S.budSel.size > 0){
-    // Gunakan budget selection sebagai sumber kebenaran
-    dealtNames = new Set(S.budSel);
-  } else if(allMode){
+  if(allMode){
+    const hasBudget = S.budSelByQuarter && Object.values(S.budSelByQuarter).some(s => s.size > 0);
     dealtNames = new Set();
-    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealtNames.add(n)));
+    if(hasBudget){
+      QUARTERS.forEach(q => S.budSelByQuarter[q]?.forEach(n => dealtNames.add(n)));
+    } else {
+      QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealtNames.add(n)));
+    }
   } else {
-    dealtNames = dmDealt();
+    const budSet = S.budSelByQuarter?.[qid];
+    dealtNames = (budSet && budSet.size > 0) ? budSet : dmDealt();
   }
   const dealtCpds=dealtNames.size>0?COMPOUNDS.filter(c=>dealtNames.has(c.name)):COMPOUNDS;
   const noDeal=dealtNames.size===0;
@@ -428,7 +430,7 @@ export function pVial(){
   <div style="font-size:10px;color:var(--t3);margin-bottom:6px">
     ${noDeal
       ?'Menampilkan semua compound — centang di Budget tab untuk filter aktif'
-      :S.budSel?.size>0
+      :S.budSelByQuarter&&Object.values(S.budSelByQuarter).some(s=>s.size>0)
         ?`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang dicentang di Budget (aktif/terbeli)`
         :`Dari <b style="color:var(--t1)">${dealtCpds.length} compound</b> yang di-deal di Decision Matrix`}
   </div>
