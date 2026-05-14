@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=66';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=67';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,37 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=66';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=66';
+} from './state.js?v=67';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=67';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=66';
+import * as stateModule from './state.js?v=67';
+
+// ── SINGLE SOURCE OF TRUTH helper ──
+// budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
+// Semua panel WAJIB pakai ini — bukan DM.selectedByQuarter langsung.
+function budOrDM(qid){
+  const bs = S.budSelByQuarter?.[qid];
+  if(bs && bs.size > 0) return bs;
+  return DM.selectedByQuarter[qid] || new Set();
+}
+// Union semua quarter (untuk allMode)
+function budOrDMAll(){
+  const hasBudget = S.budSelByQuarter && Object.values(S.budSelByQuarter).some(s => s.size > 0);
+  const out = new Set();
+  if(hasBudget){
+    QUARTERS.forEach(q => S.budSelByQuarter[q]?.forEach(n => out.add(n)));
+  } else {
+    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => out.add(n)));
+  }
+  return out;
+}
+// Quarter scope yang aktif (ada compound-nya)
+function activeScopeQuarters(allMode, qid){
+  return allMode
+    ? QUARTERS.filter(q => budOrDM(q).size > 0)
+    : [qid];
+}
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -26,17 +52,8 @@ export function pOverview(){
   const allMode = S.viewAll === true;
   const qid = S.quarter || QUARTERS[0];
   const qLabel = allMode ? 'All Quarters' : quarterLabel(qid);
-  // Source of truth: Budget Filter checkboxes (S.budSelByQuarter) = final deal.
-  // Fallback ke DM (hope/plan) untuk quarter yang user belum buka Budget tab.
-  const selFor = (q) => {
-    const bs = S.budSelByQuarter?.[q];
-    if(bs && bs.size > 0) return bs;
-    return DM.selectedByQuarter[q] || new Set();
-  };
-  // Scope quarters: when allMode → all active quarters (budget OR DM). Else just current.
-  const scopeQuarters = allMode
-    ? QUARTERS.filter(q => selFor(q).size > 0)
-    : [qid];
+  const selFor = budOrDM;
+  const scopeQuarters = activeScopeQuarters(allMode, qid);
 
   // Tanggal aktual dari W1 = 6 Juli 2026
   const PROTOCOL_START_LOCAL = new Date('2026-07-06T00:00:00');
@@ -399,23 +416,11 @@ export function pVial(){
   const today=new Date();
   const vt=S.vialTab||'stok';
 
-  // ── FILTER BY budget selection (S.budSelByQuarter = per-quarter dari DB) ──
+  // ── FILTER BY budget selection (single source of truth via budOrDM helper) ──
   const allMode = S.viewAll === true;
-  let dealtNames;
-  if(allMode){
-    const hasBudget = S.budSelByQuarter && Object.values(S.budSelByQuarter).some(s => s.size > 0);
-    dealtNames = new Set();
-    if(hasBudget){
-      QUARTERS.forEach(q => S.budSelByQuarter[q]?.forEach(n => dealtNames.add(n)));
-    } else {
-      QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dealtNames.add(n)));
-    }
-  } else {
-    const budSet = S.budSelByQuarter?.[qid];
-    dealtNames = (budSet && budSet.size > 0) ? budSet : dmDealt();
-  }
-  const dealtCpds=dealtNames.size>0?COMPOUNDS.filter(c=>dealtNames.has(c.name)):COMPOUNDS;
-  const noDeal=dealtNames.size===0;
+  const dealtNames = allMode ? budOrDMAll() : budOrDM(qid);
+  const dealtCpds = dealtNames.size > 0 ? COMPOUNDS.filter(c => dealtNames.has(c.name)) : COMPOUNDS;
+  const noDeal = dealtNames.size === 0;
 
   // ── SUMMARY COUNTS (hanya dari yang di-deal) ──
   const emptyCount=dealtCpds.filter(c=>(inventoryCache[c.name]?.qty||0)===0).length;
@@ -471,13 +476,11 @@ export function pVial(){
   };
   const fmtDateVP = (d) => d.toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
 
-  // Total vial dibutuhkan untuk compound across all DM quarters
+  // Total vial dibutuhkan untuk compound across all budget quarters
   const totalVialsNeeded = (c) => {
     let total = 0;
-    QUARTERS.forEach(qid => {
-      if(DM.selectedByQuarter[qid]?.has(c.name)){
-        total += tlCostForQuarter(c, qid).vials;
-      }
+    QUARTERS.forEach(q => {
+      if(budOrDM(q).has(c.name)) total += tlCostForQuarter(c, q).vials;
     });
     return total;
   };
@@ -836,8 +839,8 @@ export function pTimeline(){
     </div>`;
   }
 
-  // Y axis: ONLY compound dari DM di quarter ini (bukan union)
-  const yNames = DM.selectedByQuarter[qid] || new Set();
+  // Y axis: budget selection untuk quarter ini (fallback DM)
+  const yNames = budOrDM(qid);
   const yCompounds = [...yNames]
     .map(n => COMPOUNDS.find(c => c.name === n))
     .filter(Boolean)
@@ -958,18 +961,9 @@ export function pBudget(){
   const qid = S.quarter;
   const cap = S.budCap;
   const qLabel = allMode ? 'All Quarters' : quarterLabel(qid);
-  // dmSelected: union all quarters in allMode, else per-quarter
-  let dmSelected;
-  if(allMode){
-    dmSelected = new Set();
-    QUARTERS.forEach(q => DM.selectedByQuarter[q]?.forEach(n => dmSelected.add(n)));
-  } else {
-    dmSelected = DM.selectedByQuarter[qid] || new Set();
-  }
-  // scopeQuarters untuk cost aggregation
-  const scopeQuarters = allMode
-    ? QUARTERS.filter(q => (DM.selectedByQuarter[q]?.size || 0) > 0)
-    : [qid];
+  // dmSelected: pakai budget selection (budOrDM) sebagai source of truth
+  const dmSelected = allMode ? budOrDMAll() : budOrDM(qid);
+  const scopeQuarters = activeScopeQuarters(allMode, qid);
 
   // Empty state: DM untuk quarter ini belum di-isi
   if(dmSelected.size === 0){
@@ -985,14 +979,13 @@ export function pBudget(){
     </div>`;
   }
 
-  // Compound list dari DM — sorted by efficiencyScore DESC
-  // Cost: sum across scopeQuarters per compound (kalau allMode → multi-quarter sum)
+  // Compound list dari budget/DM — sorted by efficiencyScore DESC
   const sorted = [...COMPOUNDS]
     .filter(c => dmSelected.has(c.name))
     .map(c => {
       let cost = 0, vials = 0, totalDose = 0;
       scopeQuarters.forEach(q => {
-        if(DM.selectedByQuarter[q]?.has(c.name)){
+        if(budOrDM(q).has(c.name)){
           const r = tlCostForQuarter(c, q);
           cost += r.cost; vials += r.vials; totalDose += r.totalDose;
         }
