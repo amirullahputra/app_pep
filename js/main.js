@@ -21,11 +21,11 @@ window.addEventListener('unhandledrejection', e => {
 // Cache-bust: import URL pakai ?v=N supaya re-fetch saat ada perubahan
 // export shape di file dependent. SEMUA imports HARUS pakai value yang SAMA
 // untuk hindari module duplication. Bump together saat deploy.
-import { PHASES, COMPOUNDS, SP } from './data.js?v=63';
+import { PHASES, COMPOUNDS, SP } from './data.js?v=65';
 import { S, rpM, initBudSel, QUARTERS, quarterLabel, quarterDateRange,
-  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=63';
-import * as stateModule from './state.js?v=63';
-import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=63';
+  quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, tlCostForQuarter } from './state.js?v=65';
+import * as stateModule from './state.js?v=65';
+import { DM, syncDMStages, buildDefaultSeed } from './state.js?v=65';
 import {
   saveBudgetToDB, loadBudgetFromDB,
   loadCustomDoses, loadInventory, loadReconVials,
@@ -37,14 +37,14 @@ import {
   setupAuthListener,
   loadDMStages, setDMStage, removeDMStage, seedDMStages,
   supa
-} from './supabase.js?v=63';
+} from './supabase.js?v=65';
 import {
   pOverview, pDecision, pVial, pTimeline, pBudget, pCompounds,
   dmSortBy, dmToggle, dmToggleAll, dmSetFilter, dmUpdateSummary,
   dmPush, dmSetStage
-} from './panels.js?v=63';
-import * as panelFns from './panels.js?v=63';
-import * as supaFns from './supabase.js?v=63';
+} from './panels.js?v=65';
+import * as panelFns from './panels.js?v=65';
+import * as supaFns from './supabase.js?v=65';
 
 // ── Expose to window for inline onclick="" handlers ──
 Object.assign(window, panelFns, supaFns, stateModule);
@@ -302,7 +302,17 @@ async function refreshDMStages(){
 window.refreshDMStages = refreshDMStages;
 
 // ── BUDGET HELPERS ──
-function toggleBudSel(n){S.budSel.has(n)?S.budSel.delete(n):S.budSel.add(n);saveBudgetToDB();renderPanels();}
+let _budSaveTimer = null;
+function toggleBudSel(n){
+  S.budSel.has(n) ? S.budSel.delete(n) : S.budSel.add(n);
+  // Sync ke budSelByQuarter immediately agar card + overview reflect instan
+  S.budSelByQuarter[S.budQuarter] = new Set(S.budSel);
+  // Debounce DB save 600ms — render instan dulu
+  clearTimeout(_budSaveTimer);
+  _budSaveTimer = setTimeout(() => saveBudgetToDB(), 600);
+  renderPanels();
+  renderQuarterRow();
+}
 async function switchBudQuarter(qid){S.budQuarter=qid;await loadBudgetFromDB(qid);renderPanels();}
 function toggleCat(k){
   if(S.filterCats.has(k)){if(S.filterCats.size>1)S.filterCats.delete(k);}
