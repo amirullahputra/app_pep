@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // STATE & UTILS
 // ══════════════════════════════════════════════════════════
-import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=84';
+import { CAT, COMPOUNDS, SC, SP, VSPECS, REDUNDANCY } from './data.js?v=85';
 
 // ── QUARTER STRUCTURE ──
 // 12 calendar quarters Q1 2026 sampai Q4 2028. Pakai underscore (Q1_2026)
@@ -72,11 +72,14 @@ export function costForQuarter(compoundName, qid){
   return { mg: totalMg, vials, cost: vials * vPrice };
 }
 
-// Default quarter: kalau today di antara protocol range → quarter aktif; else Q3_2026
+// Pre-protocol quarters — tidak ada compound aktif, skip sebagai default
+const PRE_PROTOCOL = new Set(['Q1_2026','Q2_2026']);
+
+// Default quarter: pakai quarter saat ini, tapi kalau pre-protocol → Q3_2026 (protocol start)
 function defaultQuarter(){
   const cur = currentQuarter();
-  if(QUARTERS.includes(cur)) return cur;
-  return 'Q3_2026'; // anchor: start protocol
+  if(QUARTERS.includes(cur) && !PRE_PROTOCOL.has(cur)) return cur;
+  return 'Q3_2026';
 }
 
 export let S={
