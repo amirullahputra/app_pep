@@ -1,9 +1,9 @@
 ﻿// ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG + AUTH + DB FUNCTIONS
 // ══════════════════════════════════════════════════════════
-import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=77';
-import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek, TL } from './state.js?v=77';
-import { compoundFromDB } from './models.js?v=77';
+import { _setPepData, COMPOUNDS, VSPECS, SHELF_LIFE } from './data.js?v=78';
+import { S, initBudSel, customDoses, inventoryCache, reconCache, getDose, QUARTERS, tlCellStatus, tlDoseForWeek, TL } from './state.js?v=78';
+import { compoundFromDB } from './models.js?v=78';
 
 const SUPA_URL='https://guhhoqpvwzzrlwgfugsb.supabase.co';
 const SUPA_KEY='sb_publishable_yu8KTS5mId2hV7kVjScvZA_-geYqKHv';

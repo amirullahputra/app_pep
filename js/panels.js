@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=77';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=78';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=77';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=77';
+} from './state.js?v=78';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=78';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=77';
+import * as stateModule from './state.js?v=78';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -828,11 +828,9 @@ export function pVial(){
 export function pTimeline(){
   if(S.viewAll){
     const visQ = ['Q3_2026','Q4_2026','Q1_2027','Q2_2027'];
-
-    // Filter state — stored in S.tlFilter (category key or 'all' or 'active')
     const filt = S.tlFilter || 'all';
 
-    // Union semua compound
+    // Union semua compound dari semua quarter
     const allNames = new Set();
     visQ.forEach(q => budOrDM(q).forEach(n => allNames.add(n)));
     if(allNames.size === 0) return `<div class="card">
@@ -847,118 +845,132 @@ export function pTimeline(){
       .filter(Boolean)
       .sort((a,b) => (a.cat||'').localeCompare(b.cat||'') || a.name.localeCompare(b.name));
 
-    // Apply filter
     if(filt === 'active'){
-      allCpds = allCpds.filter(c => visQ.some(q => {
-        const cyc = tlGetCycle(q, c.name);
-        return budOrDM(q).has(c.name) && cyc.on > 0;
-      }));
+      allCpds = allCpds.filter(c => visQ.some(q => budOrDM(q).has(c.name) && tlGetCycle(q,c.name).on > 0));
     } else if(filt !== 'all'){
       allCpds = allCpds.filter(c => c.cat === filt);
     }
 
-    // Category filter chips
+    // Filter bar
     const cats = [...new Set([...allNames].map(n => COMPOUNDS.find(c=>c.name===n)?.cat).filter(Boolean))].sort();
     const activeCount = [...allNames].filter(n => {
       const c = COMPOUNDS.find(x=>x.name===n);
       return c && visQ.some(q => budOrDM(q).has(n) && tlGetCycle(q,n).on > 0);
     }).length;
-
-    const btnSt = (key) => {
-      const on = filt === key;
-      return `padding:4px 12px;border-radius:20px;border:1.5px solid ${on?'var(--acc)':'var(--bdr)'};background:${on?'var(--acc)':'transparent'};color:${on?'#fff':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;transition:all .15s`;
-    };
-    const filterBar = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    const btnSt = (key) => { const on = filt===key; return `padding:4px 12px;border-radius:20px;border:1.5px solid ${on?'var(--acc)':'var(--bdr)'};background:${on?'var(--acc)':'transparent'};color:${on?'#fff':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;transition:all .15s`; };
+    const filterBar = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
       <button style="${btnSt('all')}" onclick="tlSetFilter('all')">Semua (${allNames.size})</button>
       <button style="${btnSt('active')}" onclick="tlSetFilter('active')">✅ Ada siklus (${activeCount})</button>
       <span style="width:1px;height:18px;background:var(--bdr);margin:0 2px"></span>
-      ${cats.map(cat => {
-        const n = [...allNames].filter(nm => COMPOUNDS.find(c=>c.name===nm)?.cat===cat).length;
-        return `<button style="${btnSt(cat)}" onclick="tlSetFilter('${cat}')">${CAT[cat]?.n||cat} (${n})</button>`;
-      }).join('')}
+      ${cats.map(cat => { const n=[...allNames].filter(nm=>COMPOUNDS.find(c=>c.name===nm)?.cat===cat).length; return `<button style="${btnSt(cat)}" onclick="tlSetFilter('${cat}')">${CAT[cat]?.n||cat} (${n})</button>`; }).join('')}
     </div>`;
 
-    // Preset options
+    // Presets
     const PRESETS = [
-      { label: '— belum diset', on: 0,  off: 0 },
-      { label: 'Full quarter',  on: 99, off: 0 },
-      { label: 'Blast 12w',    on: 12, off: 0 },
-      { label: 'Blast 10w',    on: 10, off: 0 },
-      { label: 'Blast 8w',     on: 8,  off: 0 },
-      { label: 'Blast 6w',     on: 6,  off: 0 },
-      { label: 'Blast 4w',     on: 4,  off: 0 },
-      { label: '6on / 2off',   on: 6,  off: 2 },
-      { label: '4on / 1off',   on: 4,  off: 1 },
-      { label: '8on / 4off',   on: 8,  off: 4 },
+      { label:'— belum diset', on:0,  off:0 },
+      { label:'Full quarter',  on:99, off:0 },
+      { label:'Blast 12w',    on:12, off:0 },
+      { label:'Blast 10w',    on:10, off:0 },
+      { label:'Blast 8w',     on:8,  off:0 },
+      { label:'Blast 6w',     on:6,  off:0 },
+      { label:'Blast 4w',     on:4,  off:0 },
+      { label:'6on / 2off',   on:6,  off:2 },
+      { label:'4on / 1off',   on:4,  off:1 },
+      { label:'8on / 4off',   on:8,  off:4 },
     ];
-    function cycleToVal(cyc){ if(!cyc||(!cyc.on&&!cyc.off)) return '0:0'; for(const p of PRESETS) if(p.on===cyc.on&&p.off===cyc.off) return `${p.on}:${p.off}`; return 'custom'; }
-    function cycleDesc(cyc){ if(!cyc||!cyc.on) return null; if(cyc.on>=99) return 'Full'; return cyc.off>0?`${cyc.on}on/${cyc.off}off`:`${cyc.on}w blast`; }
+    const cycleToVal = (cyc) => { if(!cyc||(!cyc.on&&!cyc.off)) return '0:0'; for(const p of PRESETS) if(p.on===cyc.on&&p.off===cyc.off) return `${p.on}:${p.off}`; return 'custom'; };
 
-    // 4 cards — same clean layout as before, but each row has preset dropdown inline
-    const cards = visQ.map(q => {
-      const weeks = weeksInQuarter(q);
-      if(!weeks.length) return '';
-      const cpds = allCpds.filter(c => budOrDM(q).has(c.name));
-      if(!cpds.length) return `<div class="card" style="opacity:.5">
-        <div class="card-title" style="margin-bottom:0"><span class="ico">🗓</span> ${quarterLabel(q)}<span style="margin-left:auto;font-size:10px;color:var(--t3)">Tidak ada compound</span></div>
-      </div>`;
+    // Build flat week array W1-W52 across all quarters
+    const allWeeks = [];
+    visQ.forEach(q => weeksInQuarter(q).forEach(w => allWeeks.push({w, q})));
 
-      const wRange = `W${weeks[0]}–W${weeks[weeks.length-1]}`;
-      const activeInQ = cpds.filter(c => tlGetCycle(q,c.name).on > 0).length;
+    const CELL_W = 14; // px per cell
+    const LABEL_W = 220; // px left column
 
-      const wkRow = `<div style="display:flex;gap:2px;margin-bottom:4px;padding-left:186px">
-        ${weeks.map(w=>`<div style="min-width:14px;width:14px;text-align:center;font-size:7px;color:var(--t3)">${w%2===1?`W${w}`:''}</div>`).join('')}
-      </div>`;
+    // Quarter header spans
+    const qHeaders = visQ.map(q => {
+      const wks = weeksInQuarter(q);
+      if(!wks.length) return '';
+      const span = wks.length * (CELL_W + 2); // cell width + gap
+      return `<div style="width:${span}px;flex-shrink:0;text-align:center;font-size:9px;font-weight:700;color:var(--t0);padding:2px 0;border-left:2px solid var(--bdr);background:var(--bg2);border-radius:3px 3px 0 0">${quarterLabel(q)}</div>`;
+    }).join('');
 
-      const rows = cpds.map(c => {
-        const escName = c.name.replace(/'/g,"\\'");
-        const vialUnit = c.vialUnit || VSPECS[c.name]?.unit || 'mg';
+    // Week label row
+    const wkLabels = allWeeks.map(({w, q}, i) => {
+      const isFirst = i === 0 || allWeeks[i-1].q !== q;
+      return `<div style="width:${CELL_W}px;flex-shrink:0;text-align:center;font-size:7px;color:var(--t3);${isFirst?'border-left:2px solid var(--bdr);':''}">${w%2===1?`W${w}`:''}</div>`;
+    }).join('');
+
+    if(allCpds.length === 0) return `<div>
+      ${filterBar}
+      <div class="card"><div style="padding:2rem;text-align:center;color:var(--t2);font-size:13px">Tidak ada compound yang cocok filter ini.</div></div>
+    </div>`;
+
+    // Compound rows
+    const rows = allCpds.map(c => {
+      const escName = c.name.replace(/'/g,"\\'");
+      const inQ = visQ.filter(q => budOrDM(q).has(c.name));
+
+      // Left column: badge + name + preset dropdown per active quarter (stacked)
+      const dropdowns = inQ.map(q => {
         const cyc = tlGetCycle(q, c.name);
         const curVal = cycleToVal(cyc);
-        const desc = cycleDesc(cyc);
         const isSet = cyc.on > 0;
-
-        const options = PRESETS.map(p => `<option value="${p.on}:${p.off}" ${curVal===`${p.on}:${p.off}`?'selected':''}>${p.label}</option>`).join('')
+        const opts = PRESETS.map(p => `<option value="${p.on}:${p.off}" ${curVal===`${p.on}:${p.off}`?'selected':''}>${p.label}</option>`).join('')
           + `<option value="custom" ${curVal==='custom'?'selected':''}>Custom…</option>`;
-
-        const cells = weeks.map(w => {
-          const st = tlCellStatus(w, c, q);
-          const dose = tlDoseForWeek(w, c, q);
-          const hasCustom = customDoses[c.name]?.[w] !== undefined;
-          const catCls = st==='on' ? (CAT[c.cat]?.cls||'') : '';
-          const bg = st==='on'&&!catCls ? 'var(--acc)' : st==='off' ? 'var(--bdr2)' : 'var(--bg3)';
-          const shadow = hasCustom ? 'box-shadow:0 0 0 1.5px #f59e0b inset;' : '';
-          const doseStr = dose>0&&st==='on' ? `<span style="font-size:6px;color:#fff;font-weight:700">${dose}</span>` : '';
-          return `<div class="${catCls?`tl-on ${catCls}`:''}" onclick="openDoseEdit('${escName}',${w})" title="${c.name} W${w} · ${st.toUpperCase()}" style="min-width:14px;width:14px;height:14px;border-radius:2px;background:${bg};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;${shadow}">${doseStr}</div>`;
-        }).join('');
-
-        return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:7px;min-width:54px;text-align:center;flex-shrink:0">${CAT[c.cat]?.n||c.cat}</span>
-          <span style="font-size:10px;font-weight:700;color:var(--t0);width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</span>
-          <select style="width:90px;padding:2px 4px;border:1px solid ${isSet?'var(--acc)':'var(--bdr)'};border-radius:5px;background:${isSet?'color-mix(in srgb,var(--acc) 10%,var(--bg2))':'var(--bg2)'};color:var(--t0);font-size:9px;font-weight:${isSet?'700':'400'};cursor:pointer;font-family:inherit;flex-shrink:0" onchange="tlApplyPreset('${q}','${escName}',this.value)">${options}</select>
-          ${desc ? `<span style="font-size:8px;font-weight:700;color:var(--acc);white-space:nowrap">${desc}</span>` : ''}
-          <div style="display:flex;gap:2px;flex-wrap:nowrap">${cells}</div>
+        return `<div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+          <span style="font-size:7px;color:var(--t3);width:28px;flex-shrink:0">${quarterLabel(q).replace(' ','')}</span>
+          <select style="flex:1;padding:1px 3px;border:1px solid ${isSet?'var(--acc)':'var(--bdr)'};border-radius:4px;background:${isSet?'color-mix(in srgb,var(--acc) 12%,var(--bg2))':'var(--bg2)'};color:var(--t0);font-size:8px;font-weight:${isSet?'700':'400'};cursor:pointer;font-family:inherit" onchange="tlApplyPreset('${q}','${escName}',this.value)">${opts}</select>
         </div>`;
       }).join('');
 
-      return `<div class="card">
-        <div class="card-title" style="margin-bottom:6px">
-          <span class="ico">🗓</span> ${quarterLabel(q)}
-          <span style="font-size:10px;color:var(--t2);font-weight:400;margin-left:6px">${wRange} · ${cpds.length} compound</span>
-          <span style="margin-left:auto;font-size:10px;font-weight:700;color:${activeInQ>0?'var(--acc)':'var(--t3)'}">${activeInQ}/${cpds.length} diset</span>
+      const leftCol = `<div style="width:${LABEL_W}px;flex-shrink:0;padding-right:8px;padding-top:2px">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:7px;padding:1px 5px;flex-shrink:0">${CAT[c.cat]?.n||c.cat}</span>
+          <span style="font-size:10px;font-weight:700;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</span>
         </div>
-        ${wkRow}
-        ${rows}
-        <div style="margin-top:6px;font-size:9px;color:var(--t3);display:flex;gap:8px">
-          <span><span style="display:inline-block;width:10px;height:10px;background:var(--acc);border-radius:2px;vertical-align:middle;margin-right:2px"></span>ON</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:var(--bdr2);border-radius:2px;vertical-align:middle;margin-right:2px"></span>OFF</span>
-        </div>
+        ${dropdowns}
+      </div>`;
+
+      // Right: 52 week cells
+      const cells = allWeeks.map(({w, q: wq}, i) => {
+        const isFirst = i === 0 || allWeeks[i-1].q !== wq;
+        const inScope = budOrDM(wq).has(c.name);
+        const st = inScope ? tlCellStatus(w, c, wq) : 'inactive';
+        const dose = inScope ? tlDoseForWeek(w, c, wq) : 0;
+        const hasCustom = customDoses[c.name]?.[w] !== undefined;
+        const catCls = st==='on' ? (CAT[c.cat]?.cls||'') : '';
+        const bg = st==='on'&&!catCls ? 'var(--acc)' : st==='off' ? 'var(--bdr2)' : 'var(--bg3)';
+        const shadow = hasCustom ? 'box-shadow:0 0 0 1.5px #f59e0b inset;' : '';
+        const doseStr = dose>0&&st==='on' ? `<span style="font-size:5px;color:#fff;font-weight:700">${dose}</span>` : '';
+        const borderLeft = isFirst ? 'border-left:2px solid var(--bdr);' : '';
+        const clickable = inScope ? `onclick="openDoseEdit('${escName}',${w})" cursor:pointer;` : '';
+        return `<div class="${catCls?`tl-on ${catCls}`:''}" ${inScope?`onclick="openDoseEdit('${escName}',${w})"`:''} title="${c.name} W${w}·${st.toUpperCase()}" style="width:${CELL_W}px;height:16px;flex-shrink:0;border-radius:2px;background:${bg};display:flex;align-items:center;justify-content:center;${shadow}${borderLeft}${inScope?'cursor:pointer;':''}">${doseStr}</div>`;
+      }).join('');
+
+      return `<div style="display:flex;align-items:flex-start;padding:4px 0;border-bottom:1px solid var(--bg3)">
+        ${leftCol}
+        <div style="display:flex;gap:2px;flex-shrink:0;align-items:center;padding-top:2px">${cells}</div>
       </div>`;
     }).join('');
 
+    const legend = `<div style="margin-top:8px;font-size:9px;color:var(--t3);display:flex;gap:10px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--acc);border-radius:2px;vertical-align:middle;margin-right:3px"></span>ON</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--bdr2);border-radius:2px;vertical-align:middle;margin-right:3px"></span>OFF</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--bg3);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Inactive / tidak dipilih quarter ini</span>
+      <span style="margin-left:auto;color:var(--t3)">Klik cell → edit dose</span>
+    </div>`;
+
     return `<div>
       ${filterBar}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${cards}</div>
+      <div class="card" style="overflow-x:auto;padding-bottom:8px">
+        <div style="display:inline-block;min-width:max-content">
+          <div style="display:flex;padding-left:${LABEL_W}px;gap:2px;margin-bottom:2px">${qHeaders}</div>
+          <div style="display:flex;padding-left:${LABEL_W}px;gap:2px;margin-bottom:6px">${wkLabels}</div>
+          ${rows}
+        </div>
+        ${legend}
+      </div>
     </div>`;
   }
   const qid = S.quarter || QUARTERS[0];
