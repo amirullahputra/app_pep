@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=78';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=79';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=78';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=78';
+} from './state.js?v=79';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=79';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=78';
+import * as stateModule from './state.js?v=79';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -845,24 +845,26 @@ export function pTimeline(){
       .filter(Boolean)
       .sort((a,b) => (a.cat||'').localeCompare(b.cat||'') || a.name.localeCompare(b.name));
 
-    if(filt === 'active'){
-      allCpds = allCpds.filter(c => visQ.some(q => budOrDM(q).has(c.name) && tlGetCycle(q,c.name).on > 0));
-    } else if(filt !== 'all'){
-      allCpds = allCpds.filter(c => c.cat === filt);
+    // Filter: 'all' | compound name string
+    if(filt !== 'all'){
+      allCpds = allCpds.filter(c => c.name === filt);
     }
 
-    // Filter bar
-    const cats = [...new Set([...allNames].map(n => COMPOUNDS.find(c=>c.name===n)?.cat).filter(Boolean))].sort();
-    const activeCount = [...allNames].filter(n => {
-      const c = COMPOUNDS.find(x=>x.name===n);
-      return c && visQ.some(q => budOrDM(q).has(n) && tlGetCycle(q,n).on > 0);
-    }).length;
-    const btnSt = (key) => { const on = filt===key; return `padding:4px 12px;border-radius:20px;border:1.5px solid ${on?'var(--acc)':'var(--bdr)'};background:${on?'var(--acc)':'transparent'};color:${on?'#fff':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;transition:all .15s`; };
-    const filterBar = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-      <button style="${btnSt('all')}" onclick="tlSetFilter('all')">Semua (${allNames.size})</button>
-      <button style="${btnSt('active')}" onclick="tlSetFilter('active')">✅ Ada siklus (${activeCount})</button>
-      <span style="width:1px;height:18px;background:var(--bdr);margin:0 2px"></span>
-      ${cats.map(cat => { const n=[...allNames].filter(nm=>COMPOUNDS.find(c=>c.name===nm)?.cat===cat).length; return `<button style="${btnSt(cat)}" onclick="tlSetFilter('${cat}')">${CAT[cat]?.n||cat} (${n})</button>`; }).join('')}
+    // Filter bar — chips per compound name
+    const btnSt = (key) => { const on = filt===key; return `padding:3px 10px;border-radius:20px;border:1.5px solid ${on?'var(--acc)':'var(--bdr)'};background:${on?'var(--acc)':'transparent'};color:${on?'#fff':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap`; };
+    const sortedNames = [...allNames]
+      .map(n => COMPOUNDS.find(c=>c.name===n))
+      .filter(Boolean)
+      .sort((a,b) => (a.cat||'').localeCompare(b.cat||'') || a.name.localeCompare(b.name));
+    const filterBar = `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button style="${btnSt('all')}" onclick="tlSetFilter('all')">Semua</button>
+      <span style="width:1px;height:18px;background:var(--bdr);margin:0 2px;flex-shrink:0"></span>
+      ${sortedNames.map(c => {
+        const escN = c.name.replace(/'/g,"\\'");
+        const hasActive = visQ.some(q => budOrDM(q).has(c.name) && tlGetCycle(q,c.name).on > 0);
+        const dot = hasActive ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${filt===c.name?'#fff':'var(--acc)'};margin-right:4px;vertical-align:middle"></span>` : '';
+        return `<button style="${btnSt(c.name)}" onclick="tlSetFilter('${escN}')">${dot}${c.name}</button>`;
+      }).join('')}
     </div>`;
 
     // Presets
