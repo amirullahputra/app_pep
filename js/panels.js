@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=63';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=64';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=63';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=63';
+} from './state.js?v=64';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=64';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=63';
+import * as stateModule from './state.js?v=64';
 
 // ──────────────────────────────────────────
 // P0 — OVERVIEW
@@ -33,6 +33,10 @@ export function pOverview(){
     if(bs && bs.size > 0) return bs;
     return DM.selectedByQuarter[q] || new Set();
   };
+  // DEBUG — remove setelah confirmed
+  console.log('[pOverview] budSelByQuarter Q3_2026:', [...(S.budSelByQuarter?.Q3_2026||[])]);
+  console.log('[pOverview] DM Q3_2026:', [...(DM.selectedByQuarter?.Q3_2026||[])]);
+  console.log('[pOverview] selFor(Q3_2026):', [...selFor('Q3_2026')]);
   // Scope quarters: when allMode → all active quarters (budget OR DM). Else just current.
   const scopeQuarters = allMode
     ? QUARTERS.filter(q => selFor(q).size > 0)
