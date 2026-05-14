@@ -1,7 +1,7 @@
 ﻿// ══════════════════════════════════════════════════════════
 // PANELS
 // ══════════════════════════════════════════════════════════
-import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=72';
+import { PHASES, CAT, COMPOUNDS, SC, SP, MECHS, VSPECS, REDUNDANCY, SHELF_LIFE } from './data.js?v=73';
 import {
   S, DM, _dmAllNames, dmDealt,
   rp, rpM, totCost, totVials,
@@ -12,11 +12,11 @@ import {
   QUARTERS, quarterLabel, quarterFromWeek, weeksInQuarter, costForQuarter, quarterCost, quarterDateRange,
   tlCellStatus, tlDoseForWeek, tlVialSummary, tlGetCycle,
   tlGetCycleEffective, tlCostForQuarter
-} from './state.js?v=72';
-import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=72';
+} from './state.js?v=73';
+import { saveBudgetToDB, saveCompoundEdit, loadAllPepData } from './supabase.js?v=73';
 
 // mutable reference to _lastSuggested and _dmAllNames via state module
-import * as stateModule from './state.js?v=72';
+import * as stateModule from './state.js?v=73';
 
 // ── SINGLE SOURCE OF TRUTH helper ──
 // budOrDM(qid): pakai budget selection jika user sudah save, fallback ke DM.
@@ -991,44 +991,36 @@ export function pTimeline(){
   let grandTotalVials = 0;
   let grandTotalCost = 0;
 
+  // Per-quarter: READ-ONLY — tampil week grid + summary (edit cycle dari Grand Total)
+  const doseFmt = (v) => {
+    if(v < 1) return Math.round(v*100)/100;
+    if(v < 10) return Math.round(v*100)/100;
+    return Math.round(v*10)/10;
+  };
+
   const rows = yCompounds.map(c => {
     const cycle = tlGetCycle(qid, c.name);
     const vialUnit = c.vialUnit || VSPECS[c.name]?.unit || 'mg';
-    // Master weekly dose dalam vial_unit (placeholder display)
-    let masterDoseInVU = 0;
-    if(c.weeklyDoseValue){
-      if(c.weeklyDoseUnit === vialUnit) masterDoseInVU = c.weeklyDoseValue;
-      else if(vialUnit === 'mg'  && c.weeklyDoseMg) masterDoseInVU = c.weeklyDoseMg;
-      else if(vialUnit === 'mcg' && c.weeklyDoseMg) masterDoseInVU = c.weeklyDoseMg * 1000;
-      else masterDoseInVU = c.weeklyDoseValue;  // IU/tablet no convert
-    }
-    const doseFmt = (v) => {
-      if(v < 1) return Math.round(v*100)/100;       // 0.35
-      if(v < 10) return Math.round(v*100)/100;      // 3.50 -> 3.5
-      return Math.round(v*10)/10;                    // 187.5 stays 187.5
-    };
-    const wtLabel = masterDoseInVU > 0 ? `${doseFmt(masterDoseInVU)}${vialUnit}/wk` : '—';
-    const currentDose = cycle.dose !== undefined ? cycle.dose : masterDoseInVU;
-    const escName = c.name.replace(/'/g,"\\'");
+    const catCls = CAT[c.cat]?.cls || '';
 
     const cells = weeks.map(w => {
       const status = tlCellStatus(w, c, qid);
       const dose = tlDoseForWeek(w, c, qid);
       const hasCustom = customDoses[c.name]?.[w] !== undefined;
-      const catCls = CAT[c.cat]?.cls || '';
       const cls = status==='on' ? `tl-cell tl-on ${catCls}${hasCustom?' tl-custom':''}`
                 : status==='off' ? `tl-cell tl-off${hasCustom?' tl-custom':''}`
-                : `tl-cell tl-inactive${hasCustom?' tl-custom':''}`;
+                : `tl-cell tl-inactive`;
       const doseStr = dose > 0 ? doseFmt(dose) : '';
-      const tip = `${c.name} W${w} · ${status.toUpperCase()}${dose>0?` · ${doseFmt(dose)}${vialUnit}`:''}${hasCustom?' (custom)':''} · click to edit`;
-      return `<div class="${cls}" title="${tip}" onclick="openDoseEdit('${escName}',${w})">${doseStr}</div>`;
+      const tip = `${c.name} W${w} · ${status.toUpperCase()}${dose>0?` · ${doseFmt(dose)}${vialUnit}`:''}${hasCustom?' (custom)':''}`;
+      return `<div class="${cls}" title="${tip}">${doseStr}</div>`;
     }).join('');
 
-    // Per-row summary
+    // Summary
     const sum = tlVialSummary(c, weeks, qid);
     grandTotalVials += sum.vials;
-    const grandTotalDoseObj = {};  // placeholder, not used
-
+    const cycleStr = cycle.on > 0
+      ? `${cycle.on}w ON${cycle.off > 0 ? ` / ${cycle.off}w OFF` : ' (one-shot)'}${cycle.start > 1 ? ` · start W${cycle.start}` : ''}`
+      : '— belum di-set';
     const summaryHtml = sum.totalDose > 0
       ? `<span class="tl-sum-d">${doseFmt(sum.totalDose)}<small>${sum.unit}</small></span><span class="tl-sum-v">${sum.vials} vial</span>`
       : `<span class="tl-sum-empty">—</span>`;
@@ -1036,15 +1028,10 @@ export function pTimeline(){
     return `<div class="tl-row">
       <div class="tl-lbl">
         <div class="tl-lbl-top">
-          <span class="lb ${CAT[c.cat]?.cls||''}" style="font-size:8px">${(c.cat||'off').toUpperCase()}</span>
+          <span class="lb ${catCls}" style="font-size:8px">${(c.cat||'off').toUpperCase()}</span>
           <span class="tl-name" title="${c.name}">${c.name}</span>
         </div>
-        <div class="tl-cycle-input">
-          <span class="tl-input-cell">ON:<input type="number" min="0" max="${weeks.length}" value="${cycle.on||''}" onchange="tlSetOn('${qid}','${escName}',this.value)" placeholder="0"></span>
-          <span class="tl-input-cell">OFF:<input type="number" min="0" max="${weeks.length}" value="${cycle.off||''}" onchange="tlSetOff('${qid}','${escName}',this.value)" placeholder="0"></span>
-          <span class="tl-input-cell">START:<input type="number" min="1" max="${weeks.length}" value="${cycle.start||1}" onchange="tlSetStart('${qid}','${escName}',this.value)" placeholder="1" title="Week mulai cycle di quarter ini (1=W1)"></span>
-          <span class="tl-input-cell">DOSE:<input type="number" min="0" step="0.01" value="${cycle.dose!==undefined?cycle.dose:''}" onchange="tlSetDose('${qid}','${escName}',this.value)" placeholder="${masterDoseInVU>0?doseFmt(masterDoseInVU):'0'}" title="Override dosis per minggu (${vialUnit}). Kosong = pakai default master."><span class="tl-unit-hint">${vialUnit}</span></span>
-        </div>
+        <div style="font-size:9px;color:var(--t3);margin-top:2px;padding-left:2px">${cycleStr}</div>
       </div>
       <div class="tl-cells">${cells}</div>
       <div class="tl-sum">${summaryHtml}</div>
@@ -1055,25 +1042,17 @@ export function pTimeline(){
     <div class="card-title">
       <span class="ico">🗓</span> Timeline — ${qLabel} · ${yCompounds.length} compounds · ${weeks.length} weeks
       <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
-        <span style="font-size:11px;font-weight:700;color:var(--t2)">
-          Total vial: <span style="color:var(--acc)">${grandTotalVials}</span>
-        </span>
-        <button onclick="saveTLCycles()" style="padding:6px 14px;border-radius:6px;border:none;background:var(--acc);color:#fff;font-size:11px;font-weight:800;cursor:pointer">💾 Save Timeline</button>
+        <span style="font-size:11px;font-weight:700;color:var(--t2)">Total vial: <span style="color:var(--acc)">${grandTotalVials}</span></span>
+        <button onclick="setViewAll(true);setTab(2)" style="padding:5px 12px;border-radius:6px;border:1.5px solid var(--acc);background:transparent;color:var(--acc);font-size:10px;font-weight:700;cursor:pointer">✏️ Edit di Grand Total →</button>
       </span>
     </div>
     <div class="tl-legend">
       <span><span class="tl-sw tl-sw-on"></span> ON cycle</span>
       <span><span class="tl-sw tl-sw-off"></span> OFF (washout)</span>
-      <span><span class="tl-sw tl-sw-inactive"></span> Inactive (ON belum di-set)</span>
-      <span style="margin-left:auto">💡 Set <b>ON/OFF</b> per compound · <b>Click cell</b> untuk override dose</span>
+      <span><span class="tl-sw tl-sw-inactive"></span> Inactive</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--t3)">Edit cycle & dose → pilih Grand Total di card atas</span>
     </div>
     <div class="tl-wrap"><div class="tl-grid">${wkRow}${rows}</div></div>
-    <div class="note" style="margin-top:8px;font-size:10px;color:var(--t3);line-height:1.5">
-      <b>Per-quarter scope</b>: pattern cycle scoped ke ${qLabel} aja. Pindah quarter di card row atas untuk plan quarter lain.
-      <b>ON/OFF</b>: lo set manual per compound (jumlah minggu). OFF=0 = one-shot (gak loop).
-      <b>Dose default</b>: cell ON otomatis isi value <code>weeklyDoseValue</code> peptide. <b>Click cell</b> untuk override (saved ke <code>custom_doses</code> — butuh login).
-      <b>Vial calc</b>: ⌈total dose ÷ vial_size⌉.
-    </div>
   </div>`;
 }
 
